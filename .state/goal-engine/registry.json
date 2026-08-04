@@ -1,0 +1,13 @@
+{
+  "schema_version": "goal-engine.registry.v1",
+  "active_goal_ids": [
+    "tokenrec-macos-token-pi-pi-subagents-.app"
+  ],
+  "goals": {
+    "tokenrec-macos-token-pi-pi-subagents-.app": {
+      "lifecycle": "active",
+      "objective": "构建 TokenRec：原生 macOS 状态栏 token 消耗记录工具，读取 pi 主会话与 pi-subagents 数据，状态栏显示当天总量，点击弹出含按小时/天/周/月折线图的面板，并打包为 .app 安装",
+      "updatedAt": "2026-08-04T14:17:04.687Z"
+    }
+  }
+}
