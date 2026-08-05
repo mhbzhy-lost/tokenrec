@@ -45,12 +45,14 @@ final class SessionScannerTests: XCTestCase {
             .appendingPathComponent("Fixtures/scanner")
         let descriptors = SessionScanner.sessionDescriptors(in: fixtureDir)
 
-        XCTAssertEqual(descriptors.count, 2)
+        XCTAssertEqual(descriptors.count, 3)
         let child = descriptors.first { $0.sessionId == "fixture-session-1" }
         XCTAssertEqual(child?.cwd, "/fixture/project")
         XCTAssertEqual(child?.subagentRunId, "461a119b-b402-47bf-ac62-397c3b5b336f")
         let ordinary = descriptors.first { $0.sessionId == "fixture-session-2" }
         XCTAssertNil(ordinary?.subagentRunId)
+        let configuredAgent = descriptors.first { $0.sessionId == "fixture-session-3" }
+        XCTAssertEqual(configuredAgent?.subagentRunId, "44444444-4444-4444-8444-444444444444")
     }
 
     func testAllSessionFilesRecursivelyCollectsSortedJSONLFiles() throws {

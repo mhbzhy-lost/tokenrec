@@ -125,7 +125,7 @@ struct SessionScanner {
     }
 
     private static func runId(fromSessionName name: String) -> String? {
-        let pattern = #"^subagent-(?:executor|spark|delegate)-([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})-[0-9]+$"#
+        let pattern = #"^subagent-[A-Za-z0-9][A-Za-z0-9._-]*-([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})-[0-9]+$"#
         guard let expression = try? NSRegularExpression(pattern: pattern),
               let match = expression.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
               let range = Range(match.range(at: 1), in: name) else { return nil }
