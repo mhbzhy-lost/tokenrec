@@ -95,6 +95,20 @@ final class UsageRepositoryTests: XCTestCase {
         XCTAssertEqual(probe.parseCount, 2)
     }
 
+    func testMalformedUsageJSONIsReportedInsteadOfSilentlyCachedAsEmpty() async throws {
+        let sessionDir = root.appendingPathComponent("sessions")
+        let malformed = "{\"type\":\"session\",\"version\":3,\"id\":\"malformed\",\"cwd\":\"/fixture\"}\n" +
+            "{\"type\":\"message\",\"timestamp\":\"2026-08-05T01:00:01Z\",\"usage\":{broken}\n"
+        try write(malformed, to: sessionDir.appendingPathComponent("malformed.jsonl"))
+        let repository = UsageRepository(artifactDirectories: { _ in [] })
+
+        let result = await repository.load(sessionDir: sessionDir)
+
+        XCTAssertTrue(result.records.isEmpty)
+        let error = try XCTUnwrap(result.errors.first)
+        XCTAssertTrue(error.message.contains("malformed usage JSON"))
+    }
+
     func testParseFailureIsReportedAndRetriedWithoutCachingEmptyResult() async throws {
         let sessionDir = root.appendingPathComponent("sessions")
         try write(session(id: "retry", input: 7), to: sessionDir.appendingPathComponent("retry.jsonl"))

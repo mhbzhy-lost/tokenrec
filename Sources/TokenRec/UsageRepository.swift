@@ -20,6 +20,18 @@ enum UsageFileSource: Sendable {
     case meta
 }
 
+enum UsageFileParserError: Error, CustomStringConvertible {
+    case malformedUsageJSON(line: Int)
+    case malformedMetaJSON
+
+    var description: String {
+        switch self {
+        case .malformedUsageJSON(let line): "malformed usage JSON at line \(line)"
+        case .malformedMetaJSON: "malformed subagent meta JSON"
+        }
+    }
+}
+
 struct UsageParsedFile: Sendable {
     let records: [UsageRecord]
     let parsedOffset: Int64
@@ -41,10 +53,16 @@ struct UsageFileParser: Sendable {
         case .session:
             return try parseSessionChunk(url: url, fromOffset: offset)
         case .transcript:
-            let records = try UsageParser.parseSubagentTranscript(url: url)
+            let text = try String(contentsOf: url, encoding: .utf8)
+            try validateUsageJSONLines(text)
+            let records = try UsageParser.parseSubagentTranscript(text)
             return UsageParsedFile(records: records, parsedOffset: try fileSize(url))
         case .meta:
-            let records = try UsageParser.parseSubagentMeta(url: url)
+            let text = try String(contentsOf: url, encoding: .utf8)
+            guard let data = text.data(using: .utf8), (try? JSONSerialization.jsonObject(with: data)) != nil else {
+                throw UsageFileParserError.malformedMetaJSON
+            }
+            let records = try UsageParser.parseSubagentMeta(text)
             return UsageParsedFile(records: records, parsedOffset: try fileSize(url))
         }
     }
@@ -66,8 +84,17 @@ struct UsageFileParser: Sendable {
         }
         guard consumed > 0 else { return UsageParsedFile(records: [], parsedOffset: fromOffset) }
         let parseable = String(decoding: data.prefix(consumed), as: UTF8.self)
+        try validateUsageJSONLines(parseable)
         let records = try UsageParser.parseSession(parseable)
         return UsageParsedFile(records: records, parsedOffset: fromOffset + Int64(consumed))
+    }
+
+    private static func validateUsageJSONLines(_ text: String) throws {
+        for (index, line) in text.split(whereSeparator: \.isNewline).enumerated() where line.contains("usage") {
+            guard let data = String(line).data(using: .utf8), (try? JSONSerialization.jsonObject(with: data)) != nil else {
+                throw UsageFileParserError.malformedUsageJSON(line: index + 1)
+            }
+        }
     }
 
     private static func fileSize(_ url: URL) throws -> Int64 {
