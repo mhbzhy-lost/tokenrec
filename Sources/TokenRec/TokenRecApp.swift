@@ -35,10 +35,11 @@ struct MenuBarLabel: View {
     @ObservedObject var store: UsageStore
 
     var body: some View {
-        Label {
-            Text(TokenFormat.compact(store.todayTokens))
-        } icon: {
+        // 显式 HStack：macOS 27 下 Label 在状态栏可能只渲染图标，保证图标右侧显示今日数据
+        HStack(spacing: 4) {
             Image(systemName: "chart.line.uptrend.xyaxis")
+            Text(TokenFormat.compact(store.todayTokens))
+                .monospacedDigit()
         }
         .help("TokenRec: 今日已消耗 \(TokenFormat.compact(store.todayTokens)) tokens")
     }
