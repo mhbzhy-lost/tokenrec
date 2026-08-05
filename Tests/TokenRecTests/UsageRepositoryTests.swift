@@ -30,6 +30,23 @@ final class UsageRepositoryTests: XCTestCase {
         XCTAssertEqual(result.records.filter { $0.source == "subagentMeta" }.count, 1)
     }
 
+    func testCorruptTranscriptFallsBackToMetaAndKeepsTranscriptError() async throws {
+        let sessionDir = root.appendingPathComponent("sessions")
+        try write("{\"type\":\"session\",\"version\":3,\"id\":\"parent\",\"cwd\":\"/fixture\"}\n", to: sessionDir.appendingPathComponent("parent.jsonl"))
+        let artifacts = root.appendingPathComponent("artifacts")
+        let runId = "55555555-5555-4555-8555-555555555555"
+        try write("{\"recordType\":\"message\",\"role\":\"assistant\",\"usage\":{broken}\n", to: artifacts.appendingPathComponent("\(runId)_executor_transcript.jsonl"))
+        try write("{\"timestamp\":\"2026-08-05T01:00:01Z\",\"modelAttempts\":[{\"usage\":{\"input\":40,\"cost\":0.40}}]}", to: artifacts.appendingPathComponent("\(runId)_executor_meta.json"))
+        let repository = UsageRepository(artifactDirectories: { _ in [artifacts] })
+
+        let result = await repository.load(sessionDir: sessionDir)
+
+        XCTAssertEqual(result.records.map(\.totalTokens), [40])
+        XCTAssertEqual(result.records.map(\.cost), [0.40])
+        XCTAssertEqual(result.errors.count, 1)
+        XCTAssertTrue(result.errors[0].path.hasSuffix("_transcript.jsonl"))
+    }
+
     func testSixUnchangedLoadsReuseCacheAndAppendParsesOnlyTail() async throws {
         let sessionDir = root.appendingPathComponent("sessions")
         let file = try write(session(id: "cache", input: 1), to: sessionDir.appendingPathComponent("cache.jsonl"))

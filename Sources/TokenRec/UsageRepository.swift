@@ -109,6 +109,7 @@ actor UsageRepository: UsageLoading {
     private struct SelectedFile: Sendable {
         let url: URL
         let source: UsageFileSource
+        let fallbackMetaURL: URL?
     }
 
     private struct FileSignature: Equatable, Sendable {
@@ -139,6 +140,13 @@ actor UsageRepository: UsageLoading {
         let errorMessage: String?
     }
 
+    private struct FallbackResolution {
+        let url: URL
+        let entry: CacheEntry?
+        let records: [UsageRecord]?
+        let error: UsageLoadError?
+    }
+
     private let parser: UsageFileParser
     private let artifactDirectories: ArtifactDirectoryResolver
     private var cache: [URL: CacheEntry] = [:]
@@ -153,7 +161,7 @@ actor UsageRepository: UsageLoading {
 
     func load(sessionDir: URL) async -> UsageLoadResult {
         let selected = selectedFiles(sessionDir: sessionDir)
-        let liveURLs = Set(selected.map(\.url))
+        let liveURLs = Set(selected.flatMap { [$0.url] + [$0.fallbackMetaURL].compactMap { $0 } })
         var nextCache: [URL: CacheEntry] = [:]
         var recordsByURL: [URL: [UsageRecord]] = [:]
         var errors: [UsageLoadError] = []
@@ -185,6 +193,10 @@ actor UsageRepository: UsageLoading {
                 if let cached = cache[file.url] {
                     nextCache[file.url] = cached
                     recordsByURL[file.url] = cached.records
+                } else if let fallback = resolveFallback(for: file) {
+                    if let entry = fallback.entry { nextCache[fallback.url] = entry }
+                    if let records = fallback.records { recordsByURL[file.url] = records }
+                    if let error = fallback.error { errors.append(error) }
                 }
                 errors.append(UsageLoadError(path: file.url.path, message: String(describing: error)))
             }
@@ -202,6 +214,10 @@ actor UsageRepository: UsageLoading {
                 if let cached = cache[url] {
                     nextCache[url] = cached
                     recordsByURL[url] = cached.records
+                } else if let fallback = resolveFallback(for: outcome.job.file) {
+                    if let entry = fallback.entry { nextCache[fallback.url] = entry }
+                    if let records = fallback.records { recordsByURL[url] = records }
+                    if let error = fallback.error { errors.append(error) }
                 }
                 errors.append(UsageLoadError(path: url.path, message: outcome.errorMessage ?? "unknown parse error"))
             }
@@ -227,16 +243,38 @@ actor UsageRepository: UsageLoading {
             artifactsByRun[runId, default: []].append(url)
         }
 
-        var selected = sessionFiles.map { SelectedFile(url: $0, source: .session) }
+        var selected = sessionFiles.map { SelectedFile(url: $0, source: .session, fallbackMetaURL: nil) }
         for runId in artifactsByRun.keys.sorted() where !childRunIds.contains(runId) {
             let files = artifactsByRun[runId, default: []].sorted { $0.path < $1.path }
+            let meta = files.first(where: { $0.lastPathComponent.hasSuffix("_meta.json") })
             if let transcript = files.first(where: { $0.lastPathComponent.hasSuffix("_transcript.jsonl") }) {
-                selected.append(SelectedFile(url: transcript, source: .transcript))
-            } else if let meta = files.first(where: { $0.lastPathComponent.hasSuffix("_meta.json") }) {
-                selected.append(SelectedFile(url: meta, source: .meta))
+                selected.append(SelectedFile(url: transcript, source: .transcript, fallbackMetaURL: meta))
+            } else if let meta {
+                selected.append(SelectedFile(url: meta, source: .meta, fallbackMetaURL: nil))
             }
         }
         return selected
+    }
+
+    private func resolveFallback(for file: SelectedFile) -> FallbackResolution? {
+        guard file.source == .transcript, let url = file.fallbackMetaURL else { return nil }
+        do {
+            let signature = try Self.signature(for: url)
+            if let cached = cache[url], cached.source == .meta, cached.signature == signature {
+                return FallbackResolution(url: url, entry: cached, records: cached.records, error: nil)
+            }
+            let parsed = try parser.parse(url: url, source: .meta, fromOffset: 0)
+            let entry = CacheEntry(source: .meta, signature: signature, parsedOffset: parsed.parsedOffset, records: parsed.records)
+            return FallbackResolution(url: url, entry: entry, records: parsed.records, error: nil)
+        } catch {
+            let cached = cache[url]
+            return FallbackResolution(
+                url: url,
+                entry: cached,
+                records: cached?.records,
+                error: UsageLoadError(path: url.path, message: String(describing: error))
+            )
+        }
     }
 
     private nonisolated static func parse(jobs: [ParseJob], with parser: UsageFileParser) async -> [ParseOutcome] {
