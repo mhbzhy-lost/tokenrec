@@ -13,7 +13,7 @@
 - 任何逻辑修复先在 `docs/bugs/` 写六要素根因文档，再写 tests-only RED，再做最小 GREEN。
 - 不引入第三方依赖，不改写 Git 历史，不提交 `dist/`、`.build/` 或本机 session 数据。
 - 默认数据源优先级：UserDefaults `sessionDir` > `PI_CODING_AGENT_SESSION_DIR` > 已存在且含 JSONL 的 `~/pi-config/var/sessions` > `~/.pi/agent/sessions`。
-- 同一 subagent run 的权威顺序：Pi child session > artifact transcript > artifact meta；不得按 token tuple 猜测去重。
+- 同一 subagent run 的权威顺序：Pi child session > artifact transcript > artifact meta；不得按 token tuple 猜测去重，也不得像 `96d9410` 一样完全删除 artifact-only fallback。
 - `UsageRecord.cost` 使用 provider/runtime 报告的真实 total；无 cost 时为 0，不做价格估算。
 - 性能门禁必须验证“解析调用次数/主线程发布边界”，不得只采瞬时 `%CPU`。
 - 验收启动的 TokenRec 进程必须记录 PID 并在 trap 中结束，不得使用宽泛 `pkill`。
@@ -172,7 +172,7 @@ fixture 前 5 行包含 `session` 和 `session_info`：
 {"type":"session_info","name":"subagent-executor-461a119b-b402-47bf-ac62-397c3b5b336f-1"}
 ```
 
-测试断言 `subagentRunId` 为 UUID，并断言无 UserDefaults/env 时选择存在且含 JSONL 的 `~/pi-config/var/sessions`，不存在时才回退默认目录。
+测试断言 `subagentRunId` 为 UUID；UserDefaults/env 的空白字符串视为未配置；无有效显式配置时选择存在且含 JSONL 的 `~/pi-config/var/sessions`，不存在时才回退默认目录。
 
 - [ ] **Step 3: 验证 RED**
 
@@ -280,7 +280,7 @@ actor UsageRepository {
 
 - [ ] **Step 1: 记录根因**
 
-写入真实复现：child session 与 `461a..._executor_transcript.jsonl` 各 12 条、各 301,379 tokens，现实现相加为双倍；meta/transcript 互斥不足以处理 child session。
+写入真实复现：child session 与 `461a..._executor_transcript.jsonl` 各 12 条、各 301,379 tokens，旧实现相加为双倍；`96d9410` 又完全移除 transcript/meta，导致 artifact-only 历史 run 被漏计。两者都不符合“child session > transcript > meta”的权威顺序。
 
 - [ ] **Step 2: 写 RED fixture**
 
@@ -306,7 +306,7 @@ else if transcriptExists { parse transcript only }
 else { parse meta }
 ```
 
-缓存 key 为 canonical URL + mtime + size；解析失败保留 error，不能把失败结果写成永久空缓存。
+缓存 entry 保存 canonical URL、file resource identity、mtime、size、首尾 4KB digest、parsed offset 与 trailing partial line。文件只增长且 identity 不变时只解析追加字节；缩短、identity/digest 漂移或同尺寸替换时全量重解析。解析失败保留旧成功值并返回 error，不能把失败结果写成永久空缓存。
 
 - [ ] **Step 6: 验证并提交**
 
@@ -396,7 +396,7 @@ git commit -m "fix(ui): 展示正确日用量成本与解析错误"
 
 - [ ] **Step 2: 写 RED 门禁**
 
-Repository test 断言 6 个不变文件在两次 refresh 中解析总次数仍为 6；一个文件变化后为 7。脚本测试通过 shell fixture 验证 trap 会结束精确 PID，拒绝使用 `pkill`/`killall`。
+Repository test 断言 6 个不变文件在两次 refresh 中解析总次数仍为 6；一个文件追加后只解析新增行；同尺寸替换并恢复 mtime 仍因 digest 漂移重解析。并发 parser fixture 用 barrier 记录 `maxConcurrentParses`，断言大于 1，防止 `96d9410` 把文件解析放在 `NSLock` 临界区而把“8 路并发”退化为串行。脚本测试通过 shell fixture 验证 trap 会结束精确 PID，拒绝使用 `pkill`/`killall`。
 
 - [ ] **Step 3: 验证 RED**
 
