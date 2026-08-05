@@ -60,7 +60,12 @@ final class SessionScannerTests: XCTestCase {
         try write("{\"recordType\":\"message\",\"role\":\"assistant\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"usage\":{\"input\":2}}", to: "project/.pi-subagents/artifacts/run_executor_transcript.jsonl")
         try write("{\"timestamp\":\"2026-01-01T00:00:00Z\",\"modelAttempts\":[{\"usage\":{\"input\":99}}]}", to: "project/.pi-subagents/artifacts/run_meta.json")
         let store = UsageStore(scanner: SessionScanner(userDefaults: defaults, environment: ["PI_CODING_AGENT_SESSION_DIR": sessions.path], homeDirectory: root))
-        store.refresh()
+        // refresh 为异步后台解析，等待记录就绪
+        let exp = expectation(description: "async refresh")
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
+            if !store.records.isEmpty { exp.fulfill(); timer.invalidate() }
+        }
+        wait(for: [exp], timeout: 5)
         XCTAssertEqual(store.records.map(\.totalTokens), [1, 2])
     }
 

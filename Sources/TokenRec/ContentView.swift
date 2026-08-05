@@ -10,6 +10,16 @@ struct ContentView: View {
         self.store = store
     }
 
+    /// 使用 store 预计算的各粒度数据（后台聚合一次，UI 不再重复 O(n) 计算）
+    private var chartPoints: [UsagePoint] {
+        switch granularity {
+        case .hour: return store.hourlyPoints
+        case .day: return store.dailyPoints
+        case .week: return store.weeklyPoints
+        case .month: return store.monthlyPoints
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -19,7 +29,8 @@ struct ContentView: View {
                 Button("设置目录") { isEditingDirectory = true }
             }
 
-            UsageStatsView(records: store.records)
+            UsageStatsView(todayTokens: store.todayTokens, monthTokens: store.monthTokens,
+                           totalTokens: store.totalTokens)
 
             Picker("统计粒度", selection: $granularity) {
                 ForEach(Granularity.allCases, id: \.self) { granularity in
@@ -28,7 +39,7 @@ struct ContentView: View {
             }
             .pickerStyle(.segmented)
 
-            UsageChartView(records: store.records, granularity: granularity)
+            UsageChartView(points: chartPoints, granularity: granularity)
 
             HStack(spacing: 4) {
                 Text("数据源：")

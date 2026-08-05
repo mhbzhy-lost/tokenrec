@@ -2,12 +2,8 @@ import Charts
 import SwiftUI
 
 struct UsageChartView: View {
-    let records: [UsageRecord]
+    let points: [UsagePoint]
     let granularity: Granularity
-
-    private var points: [UsagePoint] {
-        UsageAggregator.aggregate(records, granularity: granularity)
-    }
 
     var body: some View {
         Chart(points) { point in

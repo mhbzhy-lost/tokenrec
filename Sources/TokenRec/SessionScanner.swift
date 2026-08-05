@@ -33,8 +33,15 @@ struct SessionScanner {
         var result: [String] = []
         var seen = Set<String>()
         for file in sessionFiles.sorted(by: { $0.path < $1.path }) {
-            guard let contents = try? String(contentsOf: file, encoding: .utf8) else { continue }
-            for line in contents.split(whereSeparator: \.isNewline) {
+            // cwd 属于 session 级属性，恒在文件头部（首条 session entry）；
+            // 只读文件前 64KB 找前 20 行，避免全量读入（864 个文件全量逐行解析是 CPU 热点）
+            guard let data = try? Data(contentsOf: file, options: .mappedIfSafe) else { continue }
+            let head = data.prefix(64 * 1024)
+            let text = String(decoding: head, as: UTF8.self)
+            var linesChecked = 0
+            for line in text.split(whereSeparator: \.isNewline) {
+                linesChecked += 1
+                if linesChecked > 20 { break }
                 guard let data = String(line).data(using: .utf8),
                       let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let cwd = object["cwd"] as? String,

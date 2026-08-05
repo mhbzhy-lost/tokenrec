@@ -11,6 +11,8 @@ enum UsageParser {
         }
 
         return jsonl.split(whereSeparator: \.isNewline).compactMap { line in
+            // 快速预筛：无 usage 字段的行（绝大多数 user/tool 行）跳过完整 JSON 解析
+            guard line.contains("usage") else { return nil }
             guard let object = jsonObject(String(line)),
                   let timestamp = date(object["timestamp"]),
                   let usage = usage(in: object),
@@ -29,6 +31,8 @@ enum UsageParser {
         }
 
         return jsonl.split(whereSeparator: \.isNewline).compactMap { line in
+            // 快速预筛：无 usage 字段的行跳过完整 JSON 解析
+            guard line.contains("usage") else { return nil }
             guard let object = jsonObject(String(line)),
                   string(object["recordType"]) == "message",
                   string(object["role"]) == "assistant",
@@ -102,8 +106,17 @@ enum UsageParser {
         if let milliseconds = value as? NSNumber { return Date(timeIntervalSince1970: milliseconds.doubleValue / 1_000) }
         guard let string = value as? String else { return nil }
         if let milliseconds = Double(string) { return Date(timeIntervalSince1970: milliseconds / 1_000) }
+        return cachedFormatter.date(from: string) ?? cachedPlainFormatter.date(from: string)
+    }
+
+    /// ISO8601DateFormatter 创建成本极高（ICU 资源加载），复用同一实例避免每行新建。
+    /// 苹果文档：NSDateFormatter 自 macOS 10.9 起线程安全，可直接共享；
+    /// nonisolated(unsafe) 声明为不可变只读常量。
+    nonisolated(unsafe) private static let cachedFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: string) ?? ISO8601DateFormatter().date(from: string)
-    }
+        return formatter
+    }()
+    /// 兼容无毫秒时间戳的默认选项 formatter
+    nonisolated(unsafe) private static let cachedPlainFormatter = ISO8601DateFormatter()
 }
