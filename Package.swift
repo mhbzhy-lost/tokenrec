@@ -12,7 +12,8 @@ let package = Package(
         .testTarget(
             name: "TokenRecTests",
             dependencies: ["TokenRec"],
-            path: "Tests/TokenRecTests"
+            path: "Tests/TokenRecTests",
+            resources: [.copy("Fixtures")]
         ),
     ]
 )

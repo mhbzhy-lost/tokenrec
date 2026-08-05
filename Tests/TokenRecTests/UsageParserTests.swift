@@ -8,6 +8,16 @@ final class UsageParserTests: XCTestCase {
         XCTAssertEqual(records[0].totalTokens, 100)
     }
 
+    func testParsesReportedCostFromSessionAndTranscriptFixtures() throws {
+        let sessionRecords = try UsageParser.parseSession(url: fixtureURL("session-cost.jsonl"))
+        let transcriptRecords = try UsageParser.parseSubagentTranscript(url: fixtureURL("transcript-cost.jsonl"))
+
+        XCTAssertEqual(sessionRecords.count, 1)
+        XCTAssertEqual(sessionRecords[0].cost, 0.0125, accuracy: 0.000_001)
+        XCTAssertEqual(transcriptRecords.count, 1)
+        XCTAssertEqual(transcriptRecords[0].cost, 0.0125, accuracy: 0.000_001)
+    }
+
     func testParsesToolResultAndCompactionUsage() throws {
         let input = "{\"type\":\"toolResult\",\"timestamp\":\"2026-08-04T13:15:14Z\",\"usage\":{\"input\":1,\"output\":2}}\n{\"type\":\"compaction\",\"timestamp\":\"2026-08-04T13:16:14Z\",\"usage\":{\"input\":3,\"output\":4}}"
         XCTAssertEqual(try UsageParser.parseSession(input).map(\.totalTokens), [3, 7])
@@ -44,11 +54,13 @@ final class UsageParserTests: XCTestCase {
         XCTAssertNil(UsageParser.subagentRunId(from: "unrelated.jsonl"))
     }
 
-    func testRealFilesProduceRecords() throws {
-        let session = URL(fileURLWithPath: "/Users/mhbzhy/pi-config/var/sessions/2026-08-04T13-15-14-158Z_019fcce9-fb6e-7ed2-a823-32b520e22127.jsonl")
-        let transcript = URL(fileURLWithPath: "/Users/mhbzhy/ai-lover-client/.pi-subagents/artifacts/461a119b-b402-47bf-ac62-397c3b5b336f_executor_transcript.jsonl")
-        XCTAssertFalse(try UsageParser.parseSession(url: session).isEmpty)
-        XCTAssertFalse(try UsageParser.parseSubagentTranscript(url: transcript).isEmpty)
+    func testRepositoryFixturesProduceRecordsWithoutMachinePaths() throws {
+        XCTAssertFalse(try UsageParser.parseSession(url: fixtureURL("session-cost.jsonl")).isEmpty)
+        XCTAssertFalse(try UsageParser.parseSubagentTranscript(url: fixtureURL("transcript-cost.jsonl")).isEmpty)
+    }
+
+    private func fixtureURL(_ name: String) -> URL {
+        Bundle.module.url(forResource: name, withExtension: nil, subdirectory: "Fixtures/parser")!
     }
 
     func testParseSessionFromOffsetOnlyParsesTail() throws {

@@ -97,7 +97,8 @@ enum UsageParser {
     }
 
     private static func record(usage: [String: Any], timestamp: Date, source: String, model: String?) -> UsageRecord {
-        UsageRecord(timestamp: timestamp, inputTokens: integer(usage["input"]), outputTokens: integer(usage["output"]), cacheReadTokens: integer(usage["cacheRead"]), cacheWriteTokens: integer(usage["cacheWrite"]), source: source, model: model)
+        let cost = double(usage["cost"]) ?? double(dictionary(usage["cost"])?["total"]) ?? 0
+        return UsageRecord(timestamp: timestamp, inputTokens: integer(usage["input"]), outputTokens: integer(usage["output"]), cacheReadTokens: integer(usage["cacheRead"]), cacheWriteTokens: integer(usage["cacheWrite"]), cost: cost, source: source, model: model)
     }
 
     private static func jsonObject(_ string: String) -> [String: Any]? {
@@ -111,6 +112,11 @@ enum UsageParser {
         if let value = value as? Int { return value }
         if let value = value as? NSNumber { return value.intValue }
         return 0
+    }
+    private static func double(_ value: Any?) -> Double? {
+        if let value = value as? Double { return value }
+        if let value = value as? NSNumber { return value.doubleValue }
+        return nil
     }
 
     private static func date(_ value: Any?) -> Date? {

@@ -7,6 +7,7 @@ struct UsageRecord: Identifiable, Equatable, Sendable {
     let outputTokens: Int
     let cacheReadTokens: Int
     let cacheWriteTokens: Int
+    let cost: Double
     let source: String
     let model: String?
 
@@ -17,6 +18,7 @@ struct UsageRecord: Identifiable, Equatable, Sendable {
         outputTokens: Int,
         cacheReadTokens: Int = 0,
         cacheWriteTokens: Int = 0,
+        cost: Double = 0,
         source: String,
         model: String? = nil
     ) {
@@ -26,6 +28,7 @@ struct UsageRecord: Identifiable, Equatable, Sendable {
         self.outputTokens = outputTokens
         self.cacheReadTokens = cacheReadTokens
         self.cacheWriteTokens = cacheWriteTokens
+        self.cost = cost
         self.source = source
         self.model = model
     }

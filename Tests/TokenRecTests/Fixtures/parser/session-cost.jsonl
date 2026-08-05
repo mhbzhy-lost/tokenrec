@@ -1,0 +1,2 @@
+{"type":"session","id":"fixture-session","cwd":"/fixture/project"}
+{"type":"message","timestamp":"2026-08-05T01:00:00Z","message":{"usage":{"input":10,"output":2,"cost":{"total":0.0125}}}}
