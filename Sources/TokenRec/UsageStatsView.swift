@@ -4,12 +4,14 @@ struct UsageStatsView: View {
     let todayTokens: Int
     let monthTokens: Int
     let totalTokens: Int
+    let totalCost: Double
 
     var body: some View {
         HStack(spacing: 10) {
             StatCard(title: "今日", value: TokenFormat.compact(todayTokens), unit: "tokens")
             StatCard(title: "本月", value: TokenFormat.compact(monthTokens), unit: "tokens")
             StatCard(title: "累计", value: TokenFormat.compact(totalTokens), unit: "tokens")
+            StatCard(title: "累计成本", value: totalCost.formatted(.currency(code: "USD")), unit: "reported")
         }
     }
 }

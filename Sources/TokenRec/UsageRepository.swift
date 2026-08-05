@@ -10,6 +10,10 @@ struct UsageLoadResult: Equatable, Sendable {
     let errors: [UsageLoadError]
 }
 
+protocol UsageLoading: Sendable {
+    func load(sessionDir: URL) async -> UsageLoadResult
+}
+
 enum UsageFileSource: Sendable {
     case session
     case transcript
@@ -72,7 +76,7 @@ struct UsageFileParser: Sendable {
     }
 }
 
-actor UsageRepository {
+actor UsageRepository: UsageLoading {
     typealias ArtifactDirectoryResolver = @Sendable ([String]) -> [URL]
 
     private struct SelectedFile: Sendable {

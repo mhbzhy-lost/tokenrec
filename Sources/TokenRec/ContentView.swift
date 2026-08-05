@@ -10,14 +10,8 @@ struct ContentView: View {
         self.store = store
     }
 
-    /// 使用 store 预计算的各粒度数据（后台聚合一次，UI 不再重复 O(n) 计算）
     private var chartPoints: [UsagePoint] {
-        switch granularity {
-        case .hour: return store.hourlyPoints
-        case .day: return store.dailyPoints
-        case .week: return store.weeklyPoints
-        case .month: return store.monthlyPoints
-        }
+        store.summary.points[granularity] ?? []
     }
 
     var body: some View {
@@ -29,8 +23,12 @@ struct ContentView: View {
                 Button("设置目录") { isEditingDirectory = true }
             }
 
-            UsageStatsView(todayTokens: store.todayTokens, monthTokens: store.monthTokens,
-                           totalTokens: store.totalTokens)
+            UsageStatsView(
+                todayTokens: store.summary.todayTokens,
+                monthTokens: store.summary.monthTokens,
+                totalTokens: store.summary.totalTokens,
+                totalCost: store.summary.totalCost
+            )
 
             Picker("统计粒度", selection: $granularity) {
                 ForEach(Granularity.allCases, id: \.self) { granularity in
@@ -43,7 +41,7 @@ struct ContentView: View {
 
             HStack(spacing: 4) {
                 Text("数据源：")
-                Text(SessionScanner().resolveSessionDir().path)
+                Text(store.dataDirectory.path)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -58,10 +56,10 @@ struct ContentView: View {
         }
         .padding()
         .frame(width: 520)
-        .onAppear { store.refresh() } // 点击状态栏打开面板时立即刷新（轮询已降至 5 分钟）
+        .onAppear { Task { await store.refresh() } }
         .sheet(isPresented: $isEditingDirectory) {
             DirEditorSheet(sessionDir: $sessionDir) {
-                store.refresh()
+                Task { await store.refresh() }
             }
         }
     }
