@@ -32,6 +32,18 @@ final class RuntimeVerificationScriptTests: XCTestCase {
         XCTAssertTrue(sentinel.isRunning, "teardown 不得误杀无关进程")
     }
 
+    func testImmediateSecondExitProbeDoesNotFailDuringIdentityCapture() throws {
+        let verifier = Process()
+        verifier.executableURL = URL(fileURLWithPath: "/bin/bash")
+        verifier.arguments = [scriptURL.path, "--immediate-exit-probe"]
+        verifier.standardOutput = Pipe()
+        verifier.standardError = Pipe()
+        try verifier.run()
+        verifier.waitUntilExit()
+
+        XCTAssertEqual(verifier.terminationStatus, 0)
+    }
+
     func testIdentityMismatchProbeRefusesToKillReusedPid() throws {
         let pidFile = FileManager.default.temporaryDirectory
             .appendingPathComponent("tokenrec-mismatched-pid-\(UUID().uuidString)")

@@ -16,6 +16,18 @@ process_identity() {
     ps -ww -p "$1" -o lstart= -o command= 2>/dev/null
 }
 
+capture_identity() {
+    local pid="$1"
+    local identity
+    for _ in {1..50}; do
+        identity="$(process_identity "$pid" || true)"
+        if [[ -n "$identity" ]]; then printf '%s\n' "$identity"; return 0; fi
+        kill -0 "$pid" 2>/dev/null || return 1
+        sleep 0.01
+    done
+    return 1
+}
+
 stop_owned_pid() {
     local pid="${1:-}"
     local expected_identity="${2:-}"
@@ -50,6 +62,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+if [[ "${1:-}" == "--immediate-exit-probe" ]]; then
+    /usr/bin/true &
+    SECOND_PID=$!
+    SECOND_IDENTITY="$(capture_identity "$SECOND_PID" || true)"
+    if ! wait "$SECOND_PID"; then exit 75; fi
+    SECOND_PID=""
+    SECOND_IDENTITY=""
+    exit 0
+fi
+
 if [[ "${1:-}" == "--teardown-probe" || "${1:-}" == "--identity-mismatch-probe" ]]; then
     [[ $# -eq 2 ]] || { echo "usage: $0 ${1:-probe} <pid-file>" >&2; exit 64; }
     /bin/sleep 30 &
@@ -76,9 +98,9 @@ existing="$(exact_pids)"
 
 "$EXECUTABLE" >"$LOG_FILE" 2>&1 &
 APP_PID=$!
-APP_IDENTITY="$(process_identity "$APP_PID")"
+APP_IDENTITY="$(capture_identity "$APP_PID" || true)"
 sleep 2
-[[ "$(process_identity "$APP_PID" || true)" == "$APP_IDENTITY" ]] || {
+[[ -n "$APP_IDENTITY" && "$(process_identity "$APP_PID" || true)" == "$APP_IDENTITY" ]] || {
     echo "installed TokenRec exited during startup" >&2
     cat "$LOG_FILE" >&2
     exit 70
@@ -86,7 +108,7 @@ sleep 2
 
 "$EXECUTABLE" >>"$LOG_FILE" 2>&1 &
 SECOND_PID=$!
-SECOND_IDENTITY="$(process_identity "$SECOND_PID")"
+SECOND_IDENTITY="$(capture_identity "$SECOND_PID" || true)"
 for _ in {1..50}; do
     [[ "$(process_identity "$SECOND_PID" || true)" == "$SECOND_IDENTITY" ]] || break
     sleep 0.1
@@ -95,7 +117,10 @@ if [[ "$(process_identity "$SECOND_PID" || true)" == "$SECOND_IDENTITY" ]]; then
     echo "second TokenRec instance did not exit" >&2
     exit 71
 fi
-wait "$SECOND_PID"
+if ! wait "$SECOND_PID"; then
+    echo "second TokenRec instance exited with a failure status" >&2
+    exit 75
+fi
 SECOND_PID=""
 SECOND_IDENTITY=""
 [[ "$(process_identity "$APP_PID" || true)" == "$APP_IDENTITY" ]] || { echo "first TokenRec instance exited after double-open" >&2; exit 70; }
