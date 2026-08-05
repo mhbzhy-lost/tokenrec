@@ -30,16 +30,18 @@ final class UsageRepositoryTests: XCTestCase {
         XCTAssertEqual(result.records.filter { $0.source == "subagentMeta" }.count, 1)
     }
 
-    func testUnchangedFilesReuseCacheAndAppendParsesOnlyTail() async throws {
+    func testSixUnchangedLoadsReuseCacheAndAppendParsesOnlyTail() async throws {
         let sessionDir = root.appendingPathComponent("sessions")
         let file = try write(session(id: "cache", input: 1), to: sessionDir.appendingPathComponent("cache.jsonl"))
         let probe = ParserProbe(base: .live)
         let repository = UsageRepository(parser: probe.parser, artifactDirectories: { _ in [] })
 
         let first = await repository.load(sessionDir: sessionDir)
-        let second = await repository.load(sessionDir: sessionDir)
         XCTAssertEqual(first.records.map(\.totalTokens), [1])
-        XCTAssertEqual(second.records.map(\.totalTokens), [1])
+        for _ in 0..<5 {
+            let cached = await repository.load(sessionDir: sessionDir)
+            XCTAssertEqual(cached.records.map(\.totalTokens), [1])
+        }
         XCTAssertEqual(probe.parseCount, 1)
 
         let handle = try FileHandle(forWritingTo: file)
