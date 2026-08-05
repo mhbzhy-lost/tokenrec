@@ -57,8 +57,25 @@ final class UsageAggregatorTests: XCTestCase {
         XCTAssertEqual(points.last?.cost, 0)
     }
 
-    private func record(_ timestamp: String, input: Int, output: Int = 0) -> UsageRecord {
-        UsageRecord(timestamp: date(timestamp), inputTokens: input, outputTokens: output, source: "test")
+    func testSummaryUsesWholeDayAndMonthAndSumsReportedCost() {
+        let records = [
+            record("2026-08-19T10:15:00Z", input: 100, cost: 0.10),
+            record("2026-08-19T13:15:00Z", input: 200, cost: 0.20),
+            record("2026-07-31T23:00:00Z", input: 50, cost: 0.05),
+        ]
+
+        let summary = UsageAggregator.summarize(records, now: now, calendar: calendar)
+
+        XCTAssertEqual(summary.todayTokens, 300)
+        XCTAssertEqual(summary.monthTokens, 300)
+        XCTAssertEqual(summary.totalTokens, 350)
+        XCTAssertEqual(summary.totalCost, 0.35, accuracy: 0.000_001)
+        XCTAssertEqual(summary.points[.hour]?.last?.totalTokens, 200)
+        XCTAssertEqual(summary.points[.hour]?.last?.cost ?? -1, 0.20, accuracy: 0.000_001)
+    }
+
+    private func record(_ timestamp: String, input: Int, output: Int = 0, cost: Double = 0) -> UsageRecord {
+        UsageRecord(timestamp: date(timestamp), inputTokens: input, outputTokens: output, cost: cost, source: "test")
     }
 
     private func date(_ value: String) -> Date {

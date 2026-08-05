@@ -1,6 +1,6 @@
 import Foundation
 
-enum Granularity: CaseIterable, Sendable {
+enum Granularity: CaseIterable, Hashable, Sendable {
     case hour
     case day
     case week
@@ -33,6 +33,14 @@ enum Granularity: CaseIterable, Sendable {
     }
 }
 
+struct UsageSummary: Equatable, Sendable {
+    let todayTokens: Int
+    let monthTokens: Int
+    let totalTokens: Int
+    let totalCost: Double
+    let points: [Granularity: [UsagePoint]]
+}
+
 struct UsagePoint: Identifiable, Equatable, Sendable {
     let id: Date
     let date: Date
@@ -59,18 +67,43 @@ enum UsageAggregator {
             return []
         }
 
-        var totals: [Date: Int] = [:]
+        var tokenTotals: [Date: Int] = [:]
+        var costTotals: [Date: Double] = [:]
         for record in records {
             guard let bucket = calendar.dateInterval(of: granularity.component, for: record.timestamp)?.start,
                   bucket >= firstBucket, bucket <= currentBucket else { continue }
-            totals[bucket, default: 0] += record.totalTokens
+            tokenTotals[bucket, default: 0] += record.totalTokens
+            costTotals[bucket, default: 0] += record.cost
         }
 
         return (0..<granularity.bucketCount).compactMap { offset in
             guard let bucket = calendar.date(byAdding: granularity.component, value: offset, to: firstBucket) else {
                 return nil
             }
-            return UsagePoint(date: bucket, totalTokens: totals[bucket, default: 0])
+            return UsagePoint(date: bucket, totalTokens: tokenTotals[bucket, default: 0], cost: costTotals[bucket, default: 0])
         }
+    }
+
+    static func summarize(
+        _ records: [UsageRecord],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> UsageSummary {
+        let day = calendar.dateInterval(of: .day, for: now)
+        let month = calendar.dateInterval(of: .month, for: now)
+        var todayTokens = 0
+        var monthTokens = 0
+        var totalTokens = 0
+        var totalCost = 0.0
+        for record in records {
+            totalTokens += record.totalTokens
+            totalCost += record.cost
+            if day?.contains(record.timestamp) == true { todayTokens += record.totalTokens }
+            if month?.contains(record.timestamp) == true { monthTokens += record.totalTokens }
+        }
+        let points = Dictionary(uniqueKeysWithValues: Granularity.allCases.map { granularity in
+            (granularity, aggregate(records, granularity: granularity, now: now, calendar: calendar))
+        })
+        return UsageSummary(todayTokens: todayTokens, monthTokens: monthTokens, totalTokens: totalTokens, totalCost: totalCost, points: points)
     }
 }
