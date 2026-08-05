@@ -1,0 +1,109 @@
+import Foundation
+
+enum UsageParserError: Error, Equatable {
+    case emptyInput
+}
+
+enum UsageParser {
+    static func parseSession(_ jsonl: String) throws -> [UsageRecord] {
+        guard !jsonl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw UsageParserError.emptyInput
+        }
+
+        return jsonl.split(whereSeparator: \.isNewline).compactMap { line in
+            guard let object = jsonObject(String(line)),
+                  let timestamp = date(object["timestamp"]),
+                  let usage = usage(in: object),
+                  isMainUsageRecord(object) else { return nil }
+            return record(usage: usage, timestamp: timestamp, source: "session", model: string(object["model"]) ?? string(dictionary(object["message"])?["model"]))
+        }
+    }
+
+    static func parseSession(url: URL) throws -> [UsageRecord] {
+        try parseSession(String(contentsOf: url, encoding: .utf8))
+    }
+
+    static func parseSubagentTranscript(_ jsonl: String) throws -> [UsageRecord] {
+        guard !jsonl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw UsageParserError.emptyInput
+        }
+
+        return jsonl.split(whereSeparator: \.isNewline).compactMap { line in
+            guard let object = jsonObject(String(line)),
+                  string(object["recordType"]) == "message",
+                  string(object["role"]) == "assistant",
+                  let timestamp = date(object["timestamp"]) ?? date(object["ts"]),
+                  let usage = dictionary(object["usage"]) else { return nil }
+            return record(usage: usage, timestamp: timestamp, source: "subagentTranscript", model: string(object["model"]))
+        }
+    }
+
+    static func parseSubagentTranscript(url: URL) throws -> [UsageRecord] {
+        try parseSubagentTranscript(String(contentsOf: url, encoding: .utf8))
+    }
+
+    static func parseSubagentMeta(_ json: String) throws -> [UsageRecord] {
+        guard !json.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw UsageParserError.emptyInput
+        }
+        guard let object = jsonObject(json),
+              let timestamp = date(object["timestamp"]),
+              let attempts = object["modelAttempts"] as? [[String: Any]] else { return [] }
+
+        return attempts.compactMap { attempt in
+            guard let usage = dictionary(attempt["usage"]) else { return nil }
+            return record(usage: usage, timestamp: timestamp, source: "subagentMeta", model: string(attempt["model"]))
+        }
+    }
+
+    static func parseSubagentMeta(url: URL) throws -> [UsageRecord] {
+        try parseSubagentMeta(String(contentsOf: url, encoding: .utf8))
+    }
+
+    static func subagentRunId(from filename: String) -> String? {
+        let name = URL(fileURLWithPath: filename).lastPathComponent
+        let suffixes = ["_transcript.jsonl", "_meta.json"]
+        guard let suffix = suffixes.first(where: { name.hasSuffix($0) }) else { return nil }
+        let runID = String(name.dropLast(suffix.count)).components(separatedBy: "_").first
+        return runID?.isEmpty == false ? runID : nil
+    }
+
+    static func subagentRunId(from url: URL) -> String? {
+        subagentRunId(from: url.lastPathComponent)
+    }
+
+    private static func isMainUsageRecord(_ object: [String: Any]) -> Bool {
+        guard let type = string(object["type"]) else { return false }
+        return type == "message" || type == "toolResult" || type == "tool_result" || type == "compaction"
+    }
+
+    private static func usage(in object: [String: Any]) -> [String: Any]? {
+        dictionary(dictionary(object["message"])?["usage"]) ?? dictionary(object["usage"])
+    }
+
+    private static func record(usage: [String: Any], timestamp: Date, source: String, model: String?) -> UsageRecord {
+        UsageRecord(timestamp: timestamp, inputTokens: integer(usage["input"]), outputTokens: integer(usage["output"]), cacheReadTokens: integer(usage["cacheRead"]), cacheWriteTokens: integer(usage["cacheWrite"]), source: source, model: model)
+    }
+
+    private static func jsonObject(_ string: String) -> [String: Any]? {
+        guard let data = string.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private static func dictionary(_ value: Any?) -> [String: Any]? { value as? [String: Any] }
+    private static func string(_ value: Any?) -> String? { value as? String }
+    private static func integer(_ value: Any?) -> Int {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        return 0
+    }
+
+    private static func date(_ value: Any?) -> Date? {
+        if let milliseconds = value as? NSNumber { return Date(timeIntervalSince1970: milliseconds.doubleValue / 1_000) }
+        guard let string = value as? String else { return nil }
+        if let milliseconds = Double(string) { return Date(timeIntervalSince1970: milliseconds / 1_000) }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: string) ?? ISO8601DateFormatter().date(from: string)
+    }
+}
