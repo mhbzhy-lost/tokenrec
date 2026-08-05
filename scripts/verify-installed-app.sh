@@ -52,6 +52,19 @@ stop_owned_pid() {
     wait "$pid" 2>/dev/null || true
 }
 
+wait_for_second_exit() {
+    local pid="$1"
+    local identity="$2"
+    if [[ -n "$identity" ]]; then
+        for _ in {1..50}; do
+            [[ "$(process_identity "$pid" || true)" == "$identity" ]] || break
+            sleep 0.1
+        done
+        if [[ "$(process_identity "$pid" || true)" == "$identity" ]]; then return 1; fi
+    fi
+    wait "$pid"
+}
+
 cleanup() {
     local status=$?
     trap - EXIT INT TERM
@@ -62,11 +75,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if [[ "${1:-}" == "--immediate-exit-probe" ]]; then
+if [[ "${1:-}" == "--immediate-exit-probe" || "${1:-}" == "--second-exit-loop-probe" ]]; then
     /usr/bin/true &
     SECOND_PID=$!
     SECOND_IDENTITY="$(capture_identity "$SECOND_PID" || true)"
-    if ! wait "$SECOND_PID"; then exit 75; fi
+    if ! wait_for_second_exit "$SECOND_PID" "$SECOND_IDENTITY"; then exit 75; fi
     SECOND_PID=""
     SECOND_IDENTITY=""
     exit 0
@@ -109,15 +122,11 @@ sleep 2
 "$EXECUTABLE" >>"$LOG_FILE" 2>&1 &
 SECOND_PID=$!
 SECOND_IDENTITY="$(capture_identity "$SECOND_PID" || true)"
-for _ in {1..50}; do
-    [[ "$(process_identity "$SECOND_PID" || true)" == "$SECOND_IDENTITY" ]] || break
-    sleep 0.1
-done
-if [[ "$(process_identity "$SECOND_PID" || true)" == "$SECOND_IDENTITY" ]]; then
-    echo "second TokenRec instance did not exit" >&2
-    exit 71
-fi
-if ! wait "$SECOND_PID"; then
+if ! wait_for_second_exit "$SECOND_PID" "$SECOND_IDENTITY"; then
+    if [[ -n "$SECOND_IDENTITY" && "$(process_identity "$SECOND_PID" || true)" == "$SECOND_IDENTITY" ]]; then
+        echo "second TokenRec instance did not exit" >&2
+        exit 71
+    fi
     echo "second TokenRec instance exited with a failure status" >&2
     exit 75
 fi

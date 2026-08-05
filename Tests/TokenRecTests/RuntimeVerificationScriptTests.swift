@@ -35,7 +35,7 @@ final class RuntimeVerificationScriptTests: XCTestCase {
     func testImmediateSecondExitProbeDoesNotFailDuringIdentityCapture() throws {
         let verifier = Process()
         verifier.executableURL = URL(fileURLWithPath: "/bin/bash")
-        verifier.arguments = [scriptURL.path, "--immediate-exit-probe"]
+        verifier.arguments = [scriptURL.path, "--second-exit-loop-probe"]
         verifier.standardOutput = Pipe()
         verifier.standardError = Pipe()
         try verifier.run()
