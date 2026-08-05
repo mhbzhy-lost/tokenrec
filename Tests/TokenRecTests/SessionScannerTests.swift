@@ -52,13 +52,13 @@ final class SessionScannerTests: XCTestCase {
     }
 
     @MainActor
-    func testUsageStoreSkipsMetaWhenTranscriptExistsForRun() throws {
+    func testUsageStoreIncludesNestedSubagentSessions() throws {
+        // subagent 进程的会话记录位于 var/sessions 下嵌套目录（<parent>/<hash>/run-0/session.jsonl）
         let sessions = root.appendingPathComponent("sessions")
-        let project = root.appendingPathComponent("project")
         try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
-        try write("{\"type\":\"message\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"cwd\":\"\(project.path)\",\"usage\":{\"input\":1}}", to: "sessions/main.jsonl")
-        try write("{\"recordType\":\"message\",\"role\":\"assistant\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"usage\":{\"input\":2}}", to: "project/.pi-subagents/artifacts/run_executor_transcript.jsonl")
-        try write("{\"timestamp\":\"2026-01-01T00:00:00Z\",\"modelAttempts\":[{\"usage\":{\"input\":99}}]}", to: "project/.pi-subagents/artifacts/run_meta.json")
+        try write("{\"type\":\"message\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"usage\":{\"input\":1}}", to: "sessions/main.jsonl")
+        try write("{\"type\":\"message\",\"timestamp\":\"2026-01-01T00:00:01Z\",\"usage\":{\"input\":2}}", to: "sessions/2026-01-01T00-00-00Z_parent/abc123/run-0/session.jsonl")
+        try write("{\"type\":\"message\",\"timestamp\":\"2026-01-01T00:00:02Z\",\"usage\":{\"input\":3}}", to: "sessions/2026-01-01T00-00-00Z_parent/def456/run-0/session.jsonl")
         let store = UsageStore(scanner: SessionScanner(userDefaults: defaults, environment: ["PI_CODING_AGENT_SESSION_DIR": sessions.path], homeDirectory: root))
         // refresh 为异步后台解析，等待记录就绪
         let exp = expectation(description: "async refresh")
@@ -66,7 +66,8 @@ final class SessionScannerTests: XCTestCase {
             if !store.records.isEmpty { exp.fulfill(); timer.invalidate() }
         }
         wait(for: [exp], timeout: 5)
-        XCTAssertEqual(store.records.map(\.totalTokens), [1, 2])
+        // 合并顺序按文件路径排序，无序比较 token 集合
+        XCTAssertEqual(Set(store.records.map(\.totalTokens)), [1, 2, 3])
     }
 
     @discardableResult private func write(_ contents: String, to relativePath: String) throws -> URL {

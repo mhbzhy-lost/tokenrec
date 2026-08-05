@@ -31,35 +31,24 @@ final class UsageStore: ObservableObject {
         let dir = scanner.resolveSessionDir() // 主线程仅做轻量目录解析
         let cacheSnapshot = fileCache
         Task.detached(priority: .utility) { [weak self] in
-            let sessionFiles = SessionScanner.allSessionFiles(in: dir)
-            let sessionMeta = Self.fileMeta(for: sessionFiles)
-            let cwds = Self.projectCwdsCached(for: sessionFiles, meta: sessionMeta)
-            let artifactDirs = SessionScanner.subagentArtifactDirs(for: cwds)
-            let subagentFiles = SessionScanner.allSubagentFiles(in: artifactDirs)
-            let files = sessionFiles + subagentFiles
-            let currentMeta = sessionMeta.merging(Self.fileMeta(for: subagentFiles)) { _, new in new }
+            // 递归收集 var/sessions 下全部 *.jsonl：顶层 = pi 主进程会话，嵌套目录 = subagent 进程会话
+            // （pi-subagents 将子代理会话写入 <parent-session>/<hash>/run-N/session.jsonl，均为权威记录；
+            //  项目 .pi-subagents/artifacts 的 transcript 与嵌套会话内容重叠，不再扫描以避免双计）
+            let files = SessionScanner.allSessionFiles(in: dir)
+            let currentMeta = Self.fileMeta(for: files)
             let toParse = files.filter { url in
                 guard let meta = currentMeta[url], let cached = cacheSnapshot[url] else { return true }
                 return meta.mtime != cached.mtime || meta.size != cached.size
             }
             let parsed = Self.parseFiles(toParse)
             // 后台合并（旧缓存 + 新解析）与全部聚合，主线程仅赋值
-            func recordsFor(_ url: URL) -> [UsageRecord] {
-                if let fresh = parsed[url] { return fresh }
-                return cacheSnapshot[url]?.parsed ?? []
-            }
-            let subagentForMerge = files.filter { $0.lastPathComponent.hasSuffix("_transcript.jsonl") || $0.lastPathComponent.hasSuffix("_meta.json") }
-            let transcriptRunIDs = Set(subagentForMerge.compactMap { file in
-                file.lastPathComponent.hasSuffix("_transcript.jsonl") ? UsageParser.subagentRunId(from: file) : nil
-            })
             var merged: [UsageRecord] = []
-            for url in sessionFiles { merged += recordsFor(url) }
-            for url in subagentForMerge {
-                let runID = UsageParser.subagentRunId(from: url)
-                if url.lastPathComponent.hasSuffix("_meta.json"), let runID, transcriptRunIDs.contains(runID) {
-                    continue // 已有 transcript，防重复
+            for url in files {
+                if let fresh = parsed[url] {
+                    merged += fresh
+                } else if let cached = cacheSnapshot[url] {
+                    merged += cached.parsed
                 }
-                merged += recordsFor(url)
             }
             let now = Date()
             let hourlyPoints = UsageAggregator.aggregate(merged, granularity: .hour, now: now)
@@ -117,7 +106,7 @@ final class UsageStore: ObservableObject {
         return result
     }
 
-    /// 后台线程解析：返回 [URL: 记录列表]（subagent transcript/meta 按各自解析器）。
+    /// 后台线程解析：返回 [URL: 记录列表]。
     /// 并发解析（限 8 路）加速首次全量加载；合并顺序由调用方按文件序保证，语义不变。
     nonisolated private static func parseFiles(_ files: [URL]) -> [URL: [UsageRecord]] {
         let lock = NSLock()
@@ -132,43 +121,12 @@ final class UsageStore: ObservableObject {
                     semaphore.signal()
                     group.leave()
                 }
-                let records: [UsageRecord]
-                if file.lastPathComponent.hasSuffix("_transcript.jsonl") {
-                    records = (try? UsageParser.parseSubagentTranscript(url: file)) ?? []
-                } else if file.lastPathComponent.hasSuffix("_meta.json") {
-                    records = (try? UsageParser.parseSubagentMeta(url: file)) ?? []
-                } else {
-                    records = (try? UsageParser.parseSession(url: file)) ?? []
-                }
                 lock.lock()
-                result[file] = records
+                result[file] = (try? UsageParser.parseSession(url: file)) ?? []
                 lock.unlock()
             }
         }
         group.wait()
         return result
-    }
-
-    // MARK: - projectCwds 缓存（cwd 变化频率极低，仅 session 文件清单+mtime 变化时重扫）
-
-    private struct CwdCacheKey: Equatable {
-        let path: String
-        let mtime: Date
-        let size: Int
-    }
-
-    nonisolated(unsafe) private static var cwdCacheLock = NSLock()
-    nonisolated(unsafe) private static var cwdCacheKey: [CwdCacheKey] = []
-    nonisolated(unsafe) private static var cwdCacheValue: [String] = []
-
-    nonisolated private static func projectCwdsCached(for sessionFiles: [URL], meta: [URL: (mtime: Date, size: Int)]) -> [String] {
-        let key = sessionFiles.map { CwdCacheKey(path: $0.path, mtime: meta[$0]?.mtime ?? .distantPast, size: meta[$0]?.size ?? -1) }
-        cwdCacheLock.lock()
-        defer { cwdCacheLock.unlock() }
-        if key == cwdCacheKey { return cwdCacheValue }
-        let cwds = SessionScanner.projectCwds(from: sessionFiles)
-        cwdCacheKey = key
-        cwdCacheValue = cwds
-        return cwds
     }
 }
