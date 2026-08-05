@@ -15,17 +15,17 @@
 
 ## 自动化证据
 
-- clean rebuild：45 tests，0 failures，编译输出无 warning。
+- clean rebuild：46 tests，0 failures，编译输出无 warning。
 - `UsageRepositoryTests`：覆盖三源权威顺序、artifact-only fallback、六次静态 load、append、partial line、同尺寸恢复 mtime 替换、失败重试与并发解析。
 - `UsageStoreTests`：覆盖 MainActor 摘要发布、reported cost、错误、数据目录和 refresh 防重入。
 - `RuntimeVerificationScriptTests`：teardown probe 只结束本次 owned PID，无关 sentinel 继续存活。
 
 ## Clean archive 验证
 
-从提交 `b627452` 的 `git archive` 创建无 ignored/untracked 文件的临时目录，并使用隔离 HOME 执行最终 clean archive 验证。
+从提交 `7e18818` 的 `git archive` 创建无 ignored/untracked 文件的临时目录，并使用隔离 HOME 执行最终 clean archive 验证。
 
 ```text
-swift test                         PASS（45/45）
+swift test                         PASS（46/46）
 swift build -c release             PASS
 ./scripts/build-app.sh              PASS
 codesign --verify --deep --strict  PASS
@@ -34,6 +34,12 @@ git grep /Users/mhbzhy/ Sources Tests scripts Package.swift  无匹配
 ```
 
 临时安装包位于隔离 HOME，未覆盖真实 `~/Applications/TokenRec.app`。
+
+## 独立复审
+
+第一轮复审发现 transcript 存在但损坏时不会降级到同 runId 的 meta。该 Important 已按 bug-first/TDD 修复于 `7e18818`：无旧 transcript 成功缓存时，保留 transcript error 并采用合法 meta；专项和全量测试通过。第二轮只读复核未发现阻断项，建议代码验收通过。
+
+保留一项 Minor residual：artifact 目录仍由 session header 中的 cwd 推导；如果 artifact-only run 只存在于未出现在任何 child session header 的 worktree 路径，可能漏计。当前实盘盘点的 23 个 artifact-only run 均为失败且零 usage；为发现任意 dispatch cwd 而反复全量扫描大型 parent session 会重新引入 CPU 风险，本轮不扩大扫描面。
 
 ## 尚待安装版 canary
 
