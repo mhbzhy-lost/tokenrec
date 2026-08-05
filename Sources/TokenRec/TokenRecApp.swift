@@ -36,11 +36,11 @@ struct MenuBarLabel: View {
 
     var body: some View {
         Label {
-            Text(store.todayTokens, format: .number.notation(.compactName))
+            Text(TokenFormat.compact(store.todayTokens))
         } icon: {
             Image(systemName: "chart.line.uptrend.xyaxis")
         }
-        .help("TokenRec: 今日已消耗 \(store.todayTokens) tokens")
+        .help("TokenRec: 今日已消耗 \(TokenFormat.compact(store.todayTokens)) tokens")
     }
 }
 

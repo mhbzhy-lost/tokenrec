@@ -52,3 +52,12 @@
 - `ProcessSingletonTests` 4 用例（互斥/释放后可获取/不同锁文件不冲突/反复获取稳定）；全量 24 测试绿。
 - 首启：~20 秒完成首次全量加载（后台，UI 不卡）；稳态 60 秒窗口新增 CPU 2.2 秒（~4%），瞬时 0.0%（修复前 100% 持续）。
 - 双开：第二实例立即退出（exit 0），仅一个进程、一个状态栏图标。
+
+## 补充："今日"统计口径缺陷（2026-08-05）
+
+- **现象**：状态栏/面板"今日"显示 6827 万，用户质疑真实性。
+- **根因**：`todayTokens = hourlyPoints.last` —— 小时粒度最后一桶是**当前小时**而非今天全天，标签语义错误。
+- **数据真实性核查**（python 独立统计交叉验证）：6827 万 = 当前小时主 session 的 assistant usage（230 次调用 × 平均 ~24 万 input tokens，input 按完整上下文计费含 cacheRead）；与状态栏吻合，**数值本身是真实 API 计费口径**。
+- **重复计数排查**：主 session 中 subagent 工具的 toolResult usage 行 = 0（pi-subagents 不将子代理 usage 写入父会话）；subagent transcript 与 meta 按 runId 防重复 → **无双计**。
+- **修复**：`todayTokens = dailyPoints.last`（今天 0 点起的日粒度桶），修复后显示今天全天累计（实测约 4.99 亿，当天高强度使用含大量 subagent 任务）。
+- 已知覆盖缺口（非虚高）：goal-engine worktree 型子代理会话的 transcript 位于 worktree 内 `.pi-subagents/`，其 cwd 不出现在主 session 文件中，暂不纳入扫描（数量级远小于主会话，影响 <2%）。

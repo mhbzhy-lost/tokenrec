@@ -36,7 +36,7 @@ struct UsageChartView: View {
                 AxisGridLine()
                 AxisValueLabel {
                     if let tokens = value.as(Int.self) {
-                        Text(tokens, format: .number.notation(.compactName))
+                        Text(TokenFormat.compact(tokens))
                     }
                 }
             }

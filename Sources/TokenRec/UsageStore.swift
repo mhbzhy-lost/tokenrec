@@ -66,7 +66,7 @@ final class UsageStore: ObservableObject {
             let dailyPoints = UsageAggregator.aggregate(merged, granularity: .day, now: now)
             let weeklyPoints = UsageAggregator.aggregate(merged, granularity: .week, now: now)
             let monthlyPoints = UsageAggregator.aggregate(merged, granularity: .month, now: now)
-            let todayTokens = hourlyPoints.last?.totalTokens ?? 0
+            let todayTokens = dailyPoints.last?.totalTokens ?? 0
             let monthTokens = monthlyPoints.last?.totalTokens ?? 0
             let totalTokens = merged.reduce(0) { $0 + $1.totalTokens }
             await MainActor.run {

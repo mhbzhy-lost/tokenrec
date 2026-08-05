@@ -7,9 +7,9 @@ struct UsageStatsView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            StatCard(title: "今日", value: todayTokens.formatted(.number.notation(.compactName)), unit: "tokens")
-            StatCard(title: "本月", value: monthTokens.formatted(.number.notation(.compactName)), unit: "tokens")
-            StatCard(title: "累计", value: totalTokens.formatted(.number.notation(.compactName)), unit: "tokens")
+            StatCard(title: "今日", value: TokenFormat.compact(todayTokens), unit: "tokens")
+            StatCard(title: "本月", value: TokenFormat.compact(monthTokens), unit: "tokens")
+            StatCard(title: "累计", value: TokenFormat.compact(totalTokens), unit: "tokens")
         }
     }
 }
