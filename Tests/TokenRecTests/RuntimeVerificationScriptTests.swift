@@ -32,6 +32,29 @@ final class RuntimeVerificationScriptTests: XCTestCase {
         XCTAssertTrue(sentinel.isRunning, "teardown 不得误杀无关进程")
     }
 
+    func testIdentityMismatchProbeRefusesToKillReusedPid() throws {
+        let pidFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tokenrec-mismatched-pid-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: pidFile) }
+        let verifier = Process()
+        verifier.executableURL = URL(fileURLWithPath: "/bin/bash")
+        verifier.arguments = [scriptURL.path, "--identity-mismatch-probe", pidFile.path]
+        verifier.standardOutput = Pipe()
+        verifier.standardError = Pipe()
+        try verifier.run()
+        verifier.waitUntilExit()
+
+        XCTAssertEqual(verifier.terminationStatus, 0)
+        let pid = try XCTUnwrap(Int32(String(contentsOf: pidFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
+        defer {
+            if processExists(pid) {
+                kill(pid, SIGTERM)
+                for _ in 0..<50 where processExists(pid) { usleep(10_000) }
+            }
+        }
+        XCTAssertTrue(processExists(pid), "identity 不匹配时必须 fail closed，不得仅凭 PID 清理")
+    }
+
     private var scriptURL: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
