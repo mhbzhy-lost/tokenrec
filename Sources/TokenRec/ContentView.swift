@@ -58,6 +58,7 @@ struct ContentView: View {
         }
         .padding()
         .frame(width: 520)
+        .onAppear { store.refresh() } // 点击状态栏打开面板时立即刷新（轮询已降至 5 分钟）
         .sheet(isPresented: $isEditingDirectory) {
             DirEditorSheet(sessionDir: $sessionDir) {
                 store.refresh()

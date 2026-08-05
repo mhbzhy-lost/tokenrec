@@ -16,8 +16,10 @@ final class UsageStore: ObservableObject {
 
     private let scanner: SessionScanner
     private var monitoringTimer: Timer?
-    /// 文件级缓存：key=文件 URL，value=(mtime, size, 已解析记录)。仅重解析变化的文件。
-    private var fileCache: [URL: (mtime: Date, size: Int, parsed: [UsageRecord])] = [:]
+    /// 文件级缓存：key=文件 URL，value=(mtime, size, 已解析字节偏移, 已解析记录)。
+    /// 增量策略：size 增大（append-only）→ 从 parsedOffset 只解析新增行；
+    /// size 变小或同尺寸但 mtime 变化（重写）→ 全量重解析。
+    private var fileCache: [URL: (mtime: Date, size: Int, parsedOffset: Int64, parsed: [UsageRecord])] = [:]
     private var isRefreshing = false
 
     init(scanner: SessionScanner = SessionScanner()) {
@@ -26,29 +28,23 @@ final class UsageStore: ObservableObject {
     }
 
     func refresh() {
-        guard !isRefreshing else { return } // 后台解析慢于 10 秒周期时跳过本轮，不累积
+        guard !isRefreshing else { return } // 后台解析慢于轮询周期时跳过本轮，不累积
         isRefreshing = true
         let dir = scanner.resolveSessionDir() // 主线程仅做轻量目录解析
         let cacheSnapshot = fileCache
         Task.detached(priority: .utility) { [weak self] in
             // 递归收集 var/sessions 下全部 *.jsonl：顶层 = pi 主进程会话，嵌套目录 = subagent 进程会话
-            // （pi-subagents 将子代理会话写入 <parent-session>/<hash>/run-N/session.jsonl，均为权威记录；
-            //  项目 .pi-subagents/artifacts 的 transcript 与嵌套会话内容重叠，不再扫描以避免双计）
+            // （pi-subagents 将子代理会话写入 <parent-session>/<hash>/run-N/session.jsonl，均为权威记录）
             let files = SessionScanner.allSessionFiles(in: dir)
             let currentMeta = Self.fileMeta(for: files)
-            let toParse = files.filter { url in
-                guard let meta = currentMeta[url], let cached = cacheSnapshot[url] else { return true }
-                return meta.mtime != cached.mtime || meta.size != cached.size
-            }
-            let parsed = Self.parseFiles(toParse)
-            // 后台合并（旧缓存 + 新解析）与全部聚合，主线程仅赋值
+            // 8 路并发解析（未变化走缓存、追加走增量、重写走全量），主线程仅赋值
+            let results = Self.parseFilesConcurrently(files, meta: currentMeta, cache: cacheSnapshot)
             var merged: [UsageRecord] = []
+            var newCache: [URL: (mtime: Date, size: Int, parsedOffset: Int64, parsed: [UsageRecord])] = [:]
             for url in files {
-                if let fresh = parsed[url] {
-                    merged += fresh
-                } else if let cached = cacheSnapshot[url] {
-                    merged += cached.parsed
-                }
+                guard let meta = currentMeta[url], let result = results[url] else { continue }
+                merged += result.records
+                newCache[url] = (meta.mtime, meta.size, result.offset, result.records)
             }
             let now = Date()
             let hourlyPoints = UsageAggregator.aggregate(merged, granularity: .hour, now: now)
@@ -60,14 +56,7 @@ final class UsageStore: ObservableObject {
             let totalTokens = merged.reduce(0) { $0 + $1.totalTokens }
             await MainActor.run {
                 guard let self else { return }
-                for url in toParse {
-                    if let meta = currentMeta[url], let records = parsed[url] {
-                        self.fileCache[url] = (meta.mtime, meta.size, records)
-                    }
-                }
-                // 移除已不存在的文件缓存
-                let live = Set(files)
-                self.fileCache = self.fileCache.filter { live.contains($0.key) }
+                self.fileCache = newCache // 整表替换，天然清理已消失文件
                 self.records = merged
                 self.hourlyPoints = hourlyPoints
                 self.dailyPoints = dailyPoints
@@ -81,10 +70,34 @@ final class UsageStore: ObservableObject {
         }
     }
 
+    /// 单文件解析策略：未变化→复用缓存；size 增大→尾部增量；重写/截断→全量。
+    /// 后台线程调用（非隔离纯函数）。
+    nonisolated private static func parseFile(
+        url: URL,
+        mtime: Date,
+        size: Int,
+        cached: (mtime: Date, size: Int, parsedOffset: Int64, parsed: [UsageRecord])?
+    ) -> (records: [UsageRecord], offset: Int64) {
+        guard let cached else {
+            return ((try? UsageParser.parseSession(url: url)) ?? [], Int64(size))
+        }
+        if size == cached.size, mtime == cached.mtime {
+            return (cached.parsed, cached.parsedOffset) // 未变化
+        }
+        if size > cached.size {
+            // append-only 追加：只解析新增行（从已解析偏移开始），拼接缓存
+            let new = (try? UsageParser.parseSession(url: url, fromOffset: cached.parsedOffset)) ?? []
+            return (cached.parsed + new, Int64(size))
+        }
+        // size 变小或同尺寸重写：全量重解析
+        return ((try? UsageParser.parseSession(url: url)) ?? [], Int64(size))
+    }
+
     func startMonitoring() {
         monitoringTimer?.invalidate()
         refresh()
-        monitoringTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+        // 5 分钟轮询兜底 + 用户点击面板时（ContentView onAppear）立即刷新
+        monitoringTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
     }
@@ -106,14 +119,19 @@ final class UsageStore: ObservableObject {
         return result
     }
 
-    /// 后台线程解析：返回 [URL: 记录列表]。
-    /// 并发解析（限 8 路）加速首次全量加载；合并顺序由调用方按文件序保证，语义不变。
-    nonisolated private static func parseFiles(_ files: [URL]) -> [URL: [UsageRecord]] {
+    /// 8 路并发逐文件解析（未变化走缓存、追加走增量、重写走全量）。
+    /// 返回 [URL: (records, offset)]；合并顺序由调用方按文件序保证，语义不变。
+    nonisolated private static func parseFilesConcurrently(
+        _ files: [URL],
+        meta: [URL: (mtime: Date, size: Int)],
+        cache: [URL: (mtime: Date, size: Int, parsedOffset: Int64, parsed: [UsageRecord])]
+    ) -> [URL: (records: [UsageRecord], offset: Int64)] {
         let lock = NSLock()
-        nonisolated(unsafe) var result: [URL: [UsageRecord]] = [:]
+        nonisolated(unsafe) var result: [URL: (records: [UsageRecord], offset: Int64)] = [:]
         let semaphore = DispatchSemaphore(value: 8)
         let group = DispatchGroup()
-        for file in files {
+        for url in files {
+            guard let m = meta[url] else { continue }
             group.enter()
             semaphore.wait()
             DispatchQueue.global(qos: .utility).async {
@@ -121,8 +139,9 @@ final class UsageStore: ObservableObject {
                     semaphore.signal()
                     group.leave()
                 }
+                let r = parseFile(url: url, mtime: m.mtime, size: m.size, cached: cache[url])
                 lock.lock()
-                result[file] = (try? UsageParser.parseSession(url: file)) ?? []
+                result[url] = r
                 lock.unlock()
             }
         }

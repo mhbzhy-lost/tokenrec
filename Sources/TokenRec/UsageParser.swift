@@ -22,7 +22,18 @@ enum UsageParser {
     }
 
     static func parseSession(url: URL) throws -> [UsageRecord] {
-        try parseSession(String(contentsOf: url, encoding: .utf8))
+        try parseSession(url: url, fromOffset: 0)
+    }
+
+    /// 从指定字节偏移处开始解析（pi 会话文件 append-only，偏移=已解析长度时仅处理新增行）。
+    /// offset=0 等价于全量解析；offset 可超出当前文件大小（视为无新内容）。
+    static func parseSession(url: URL, fromOffset: Int64) throws -> [UsageRecord] {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        try handle.seek(toOffset: UInt64(max(0, fromOffset)))
+        let data = try handle.readToEnd() ?? Data()
+        guard !data.isEmpty else { return [] }
+        return try parseSession(String(decoding: data, as: UTF8.self))
     }
 
     static func parseSubagentTranscript(_ jsonl: String) throws -> [UsageRecord] {

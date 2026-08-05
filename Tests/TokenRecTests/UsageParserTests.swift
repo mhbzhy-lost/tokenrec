@@ -50,4 +50,28 @@ final class UsageParserTests: XCTestCase {
         XCTAssertFalse(try UsageParser.parseSession(url: session).isEmpty)
         XCTAssertFalse(try UsageParser.parseSubagentTranscript(url: transcript).isEmpty)
     }
+
+    func testParseSessionFromOffsetOnlyParsesTail() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tokenrec-offset-test-\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let line1 = "{\"type\":\"message\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"usage\":{\"input\":1}}\n"
+        let line2 = "{\"type\":\"message\",\"timestamp\":\"2026-01-01T00:00:01Z\",\"usage\":{\"input\":2}}\n"
+        let line3 = "{\"type\":\"message\",\"timestamp\":\"2026-01-01T00:00:02Z\",\"usage\":{\"input\":3}}"
+        try (line1 + line2 + line3).write(to: tmp, atomically: true, encoding: .utf8)
+
+        // offset = 前两行字节长度 → 只应解析出第 3 行
+        let offset = Int64((line1 + line2).data(using: .utf8)!.count)
+        let records = try UsageParser.parseSession(url: tmp, fromOffset: offset)
+        XCTAssertEqual(records.map(\.totalTokens), [3])
+
+        // offset = 0 → 全量解析
+        let all = try UsageParser.parseSession(url: tmp, fromOffset: 0)
+        XCTAssertEqual(all.map(\.totalTokens), [1, 2, 3])
+
+        // offset = 文件末尾 → 无新记录
+        let fileSize = try FileManager.default.attributesOfItem(atPath: tmp.path)[.size] as! Int
+        let empty = try UsageParser.parseSession(url: tmp, fromOffset: Int64(fileSize))
+        XCTAssertTrue(empty.isEmpty)
+    }
 }
