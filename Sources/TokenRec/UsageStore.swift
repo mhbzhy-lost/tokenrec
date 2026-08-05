@@ -4,12 +4,14 @@ import Foundation
 @MainActor
 final class UsageStore: ObservableObject {
     @Published private(set) var records: [UsageRecord] = []
+    @Published private(set) var lastError: String?
 
     private let scanner: SessionScanner
     private var monitoringTimer: Timer?
 
     init(scanner: SessionScanner = SessionScanner()) {
         self.scanner = scanner
+        startMonitoring()
     }
 
     func refresh() {
