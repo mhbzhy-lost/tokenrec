@@ -3,3 +3,4 @@
 *.xcodeproj
 Tests/TokenRecTests/.gitkeep
 .pi-subagents/
+dist/
