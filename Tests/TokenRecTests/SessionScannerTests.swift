@@ -16,13 +16,41 @@ final class SessionScannerTests: XCTestCase {
         defaults.removePersistentDomain(forName: defaults.volatileDomainNames.first ?? "")
     }
 
-    func testResolveSessionDirUsesDefaultsThenEnvironmentThenHome() {
-        let scanner = SessionScanner(userDefaults: defaults, environment: ["PI_CODING_AGENT_SESSION_DIR": "~/environment"], homeDirectory: root)
-        XCTAssertEqual(scanner.resolveSessionDir(), root.appendingPathComponent("environment"))
+    func testResolveSessionDirPrefersConfiguredThenEnvironmentDirectoryWithSessions() throws {
+        try write("{}", to: "configured/session.jsonl")
+        try write("{}", to: "environment/session.jsonl")
         defaults.set("~/configured", forKey: "sessionDir")
-        XCTAssertEqual(scanner.resolveSessionDir(), root.appendingPathComponent("configured"))
-        let fallback = SessionScanner(userDefaults: UserDefaults(suiteName: UUID().uuidString)!, environment: [:], homeDirectory: root)
-        XCTAssertEqual(fallback.resolveSessionDir(), root.appendingPathComponent(".pi/agent/sessions"))
+        let configured = SessionScanner(userDefaults: defaults, environment: ["PI_CODING_AGENT_SESSION_DIR": "~/environment"], homeDirectory: root)
+        XCTAssertEqual(configured.resolveSessionDir(), root.appendingPathComponent("configured"))
+
+        defaults.set("   ", forKey: "sessionDir")
+        XCTAssertEqual(configured.resolveSessionDir(), root.appendingPathComponent("environment"))
+    }
+
+    func testResolveSessionDirIgnoresBlankOverridesAndUsesCurrentPiSessions() throws {
+        try write("{}", to: "pi-config/var/sessions/session.jsonl")
+        defaults.set(" ", forKey: "sessionDir")
+        let scanner = SessionScanner(userDefaults: defaults, environment: ["PI_CODING_AGENT_SESSION_DIR": ""], homeDirectory: root)
+        XCTAssertEqual(scanner.resolveSessionDir(), root.appendingPathComponent("pi-config/var/sessions"))
+    }
+
+    func testResolveSessionDirFallsBackToLegacyDirectoryWhenCurrentPiSessionsAreEmpty() throws {
+        try write("{}", to: ".pi/agent/sessions/session.jsonl")
+        let scanner = SessionScanner(userDefaults: defaults, environment: [:], homeDirectory: root)
+        XCTAssertEqual(scanner.resolveSessionDir(), root.appendingPathComponent(".pi/agent/sessions"))
+    }
+
+    func testSessionDescriptorsExtractChildRunIdentityFromHeader() {
+        let fixtureDir = Bundle.module.resourceURL!
+            .appendingPathComponent("Fixtures/scanner")
+        let descriptors = SessionScanner.sessionDescriptors(in: fixtureDir)
+
+        XCTAssertEqual(descriptors.count, 2)
+        let child = descriptors.first { $0.sessionId == "fixture-session-1" }
+        XCTAssertEqual(child?.cwd, "/fixture/project")
+        XCTAssertEqual(child?.subagentRunId, "461a119b-b402-47bf-ac62-397c3b5b336f")
+        let ordinary = descriptors.first { $0.sessionId == "fixture-session-2" }
+        XCTAssertNil(ordinary?.subagentRunId)
     }
 
     func testAllSessionFilesRecursivelyCollectsSortedJSONLFiles() throws {
