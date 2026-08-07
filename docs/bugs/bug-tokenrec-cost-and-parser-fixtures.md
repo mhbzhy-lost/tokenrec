@@ -6,7 +6,7 @@ TokenRec 应保留 Pi runtime/provider 在 session、subagent transcript 或 met
 
 ## 2. 实际行为
 
-`UsageRecord` 没有成本字段，`UsageParser.record` 只保留 token 与 model；即使输入包含 `usage.cost` 或 `usage.cost.total`，结果也永久丢失。`UsageParserTests.testRealFilesProduceRecords` 还写死 `/Users/mhbzhy/...`，离开当前主机即失败。
+`UsageRecord` 没有成本字段，`UsageParser.record` 只保留 token 与 model；即使输入包含 `usage.cost` 或 `usage.cost.total`，结果也永久丢失。`UsageParserTests.testRealFilesProduceRecords` 还写死 `<home>/...`，离开当前主机即失败。
 
 ## 3. 稳定复现
 

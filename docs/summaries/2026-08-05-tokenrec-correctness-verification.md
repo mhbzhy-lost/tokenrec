@@ -30,7 +30,7 @@ swift build -c release             PASS
 ./scripts/build-app.sh              PASS
 codesign --verify --deep --strict  PASS
 git ls-files dist .build           空
-git grep /Users/mhbzhy/ Sources Tests scripts Package.swift  无匹配
+git grep ~/. Sources Tests scripts Package.swift  无匹配
 ```
 
 临时安装包位于隔离 HOME，未覆盖真实 `~/Applications/TokenRec.app`。
@@ -46,7 +46,7 @@ git grep /Users/mhbzhy/ Sources Tests scripts Package.swift  无匹配
 真实安装版验收当前 fail closed：发现已有、非本次验收启动的进程：
 
 ```text
-PID 88807 /Users/mhbzhy/Applications/TokenRec.app/Contents/MacOS/TokenRec
+PID 88807 ~/Applications/TokenRec.app/Contents/MacOS/TokenRec
 ```
 
 本次没有终止或接管该进程，也没有覆盖正在运行的真实安装包。另用隔离 `HOME/TMPDIR` 尝试启动同一 HEAD 的临时安装包，但 `FileManager.default.temporaryDirectory` 仍使用系统用户临时目录，临时实例因 PID `88807` 持有全局 singleton lock 而立即退出；验收脚本返回 70 且未误杀该 PID。这不能替代真实 canary。

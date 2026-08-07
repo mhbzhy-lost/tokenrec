@@ -100,7 +100,7 @@ func testParsesReportedCostFromSessionAndTranscriptFixtures() throws {
 }
 ```
 
-同时删除 `testRealFilesProduceRecords` 的 `/Users/mhbzhy/...` 依赖。
+同时删除 `testRealFilesProduceRecords` 的 `<home>/...` 依赖。
 
 - [ ] **Step 3: 验证 RED**
 
@@ -460,7 +460,7 @@ swift build -c release
 ./scripts/build-app.sh
 ```
 
-断言没有 `/Users/mhbzhy/` 测试路径，`git ls-files dist .build` 为空。
+断言没有 `~/.` 测试路径，`git ls-files dist .build` 为空。
 
 - [ ] **Step 3: 真实 fixture 与安装版验证**
 

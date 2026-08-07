@@ -13,7 +13,7 @@
 - macOS 13.0+（MenuBarExtra 与 Swift Charts 的最低要求）；本机 macOS 27 / Xcode 26.6 / Swift 6.3。
 - **工具链兼容性（已调研验证）**：本机 Xcode 26.6 (Build 17F113) + Swift 6.3.3 在 macOS 27 (Golden Gate, beta) 上编译/运行验证通过（最小 MenuBarExtra + Swift Charts 项目 `swift build` 成功、进程正常启动无崩溃）。Apple 官方系统要求矩阵（developer.apple.com/xcode/system-requirements/）中 Xcode 26.6 列到 "macOS Tahoe 26.x"，未包含 27（矩阵滞后于 beta，非不可用）。已知 macOS 27 行为变化：NSMenu 的 menu-item SF Symbol 图标默认隐藏（针对链接 macOS 26+ SDK 的应用），且 `NSMenuItem.preferredImageVisibility` 在 26.6 SDK 中不可用——**不影响本方案**（面板用 `.menuBarExtraStyle(.window)` 窗口样式，状态栏 label 是 status item 按钮内容而非 NSMenu 菜单项）；Task 5 目视验证时若状态栏图标异常，降级方案为 label 用非 symbol 图像（`NSCustomImageRep` 烘焙）。
 - 禁止任何第三方依赖（不引入 Charts 以外的包，不引入网络请求）。
-- 数据源目录：默认 `~/.pi/agent/sessions/`；若环境变量 `PI_CODING_AGENT_SESSION_DIR` 存在则优先使用；App 设置面板允许用户自定义路径（`UserDefaults` key `sessionDir`，为空时用默认逻辑）。本机实际路径为 `/Users/mhbzhy/pi-config/var/sessions`。
+- 数据源目录：默认 `~/.pi/agent/sessions/`；若环境变量 `PI_CODING_AGENT_SESSION_DIR` 存在则优先使用；App 设置面板允许用户自定义路径（`UserDefaults` key `sessionDir`，为空时用默认逻辑）。本机实际路径为 `~/pi-config/var/sessions`。
 - session JSONL 数据契约（已通过本机 663 个真实文件验证）：
   - 时间戳格式：ISO8601 字符串（`"2026-08-04T13:17:22.915Z"`）；兼容 Unix 毫秒数字。
   - usage 结构：`{"input": N, "output": N, "cacheRead": N, "cacheWrite": N, "reasoning": N, "totalTokens": N, "cost": {"input": F, "output": F, "cacheRead": F, "cacheWrite": F, "total": F}}`。
@@ -111,7 +111,7 @@ struct ContentView: View {
 
 - [ ] **Step 5: 构建并验证可运行**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift build`
+Run: `cd ~/tokenrec && swift build`
 Expected: BUILD SUCCESS，生成 `.build/debug/TokenRec`
 
 Run: `.build/debug/TokenRec & sleep 3; ps aux | grep TokenRec | grep -v grep`
@@ -225,7 +225,7 @@ final class UsageParserTests: XCTestCase {
 
 - [ ] **Step 2: 运行测试确认失败**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter UsageParserTests`
+Run: `cd ~/tokenrec && swift test --filter UsageParserTests`
 Expected: FAIL（UsageParser/UsageRecord 未定义，编译错误）。
 
 - [ ] **Step 3: 创建 `Sources/TokenRec/UsageModels.swift`**
@@ -352,7 +352,7 @@ enum UsageParser {
 
 - [ ] **Step 5: 运行测试确认通过**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter UsageParserTests`
+Run: `cd ~/tokenrec && swift test --filter UsageParserTests`
 Expected: PASS（6 个用例全绿）。
 
 - [ ] **Step 6: Commit**
@@ -400,7 +400,7 @@ git add -A && git commit -m "feat: parse pi session JSONL into usage records (TD
 
 - [ ] **Step 8: 运行测试确认失败**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter UsageParserTests`
+Run: `cd ~/tokenrec && swift test --filter UsageParserTests`
 Expected: FAIL（`parseSubagentTranscript`/`parseSubagentMeta`/`subagentRunId` 未定义）。
 
 - [ ] **Step 9: 在 `Sources/TokenRec/UsageParser.swift` 追加 subagent 解析实现**
@@ -507,7 +507,7 @@ extension UsageParser {
 
 - [ ] **Step 10: 运行测试确认通过**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter UsageParserTests`
+Run: `cd ~/tokenrec && swift test --filter UsageParserTests`
 Expected: PASS（原 6 个 + 新增 3 个共 9 个用例全绿）。
 
 - [ ] **Step 11: Commit**
@@ -645,7 +645,7 @@ final class UsageAggregatorTests: XCTestCase {
 
 - [ ] **Step 2: 运行测试确认失败**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter UsageAggregatorTests`
+Run: `cd ~/tokenrec && swift test --filter UsageAggregatorTests`
 Expected: FAIL（UsageAggregator 未定义）。
 
 - [ ] **Step 3: 创建 `Sources/TokenRec/UsageAggregator.swift`**
@@ -731,7 +731,7 @@ enum UsageAggregator {
 
 - [ ] **Step 4: 运行测试确认通过**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter UsageAggregatorTests`
+Run: `cd ~/tokenrec && swift test --filter UsageAggregatorTests`
 Expected: PASS（5 个用例全绿）。
 
 - [ ] **Step 5: Commit**
@@ -801,7 +801,7 @@ final class SessionScannerTests: XCTestCase {
 
 - [ ] **Step 2: 运行测试确认失败**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter SessionScannerTests`
+Run: `cd ~/tokenrec && swift test --filter SessionScannerTests`
 Expected: FAIL（SessionScanner 未定义）。
 
 - [ ] **Step 3: 创建 `Sources/TokenRec/SessionScanner.swift`**
@@ -899,7 +899,7 @@ final class UsageStore: ObservableObject {
 
 - [ ] **Step 5: 运行测试确认通过**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter SessionScannerTests`
+Run: `cd ~/tokenrec && swift test --filter SessionScannerTests`
 Expected: PASS（3 个用例全绿）。
 
 - [ ] **Step 6: Commit**
@@ -918,13 +918,13 @@ git add -A && git commit -m "feat: scan pi session dir with periodic refresh (TD
         defer { try? FileManager.default.removeItem(at: tmp) }
         let f = tmp.appendingPathComponent("s.jsonl")
         let lines = [
-            #"{\"type\":\"session\",\"timestamp\":\"2026-08-04T13:15:14.158Z\",\"cwd\":\"/Users/mhbzhy/proj-a\"}"#,
-            #"{\"type\":\"message\",\"timestamp\":\"2026-08-04T13:17:22.915Z\",\"cwd\":\"/Users/mhbzhy/proj-a\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}"#,
-            #"{\"type\":\"message\",\"timestamp\":\"2026-08-04T13:18:00.000Z\",\"cwd\":\"/Users/mhbzhy/proj-b\",\"message\":{\"role\":\"user\",\"content\":\"yo\"}}"#,
+            #"{\"type\":\"session\",\"timestamp\":\"2026-08-04T13:15:14.158Z\",\"cwd\":\"/home/user/proj-a\"}"#,
+            #"{\"type\":\"message\",\"timestamp\":\"2026-08-04T13:17:22.915Z\",\"cwd\":\"/home/user/proj-a\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}"#,
+            #"{\"type\":\"message\",\"timestamp\":\"2026-08-04T13:18:00.000Z\",\"cwd\":\"/home/user/proj-b\",\"message\":{\"role\":\"user\",\"content\":\"yo\"}}"#,
         ]
         try lines.joined(separator: "\n").data(using: .utf8)!.write(to: f)
         let cwds = SessionScanner.projectCwds(in: [f])
-        XCTAssertEqual(cwds, ["/Users/mhbzhy/proj-a", "/Users/mhbzhy/proj-b"]) // 去重
+        XCTAssertEqual(cwds, ["/home/user/proj-a", "/home/user/proj-b"]) // 去重
     }
 
     func testSubagentArtifactDirsOnlyExisting() throws {
@@ -959,7 +959,7 @@ git add -A && git commit -m "feat: scan pi session dir with periodic refresh (TD
 
 - [ ] **Step 8: 运行测试确认失败**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test --filter SessionScannerTests`
+Run: `cd ~/tokenrec && swift test --filter SessionScannerTests`
 Expected: FAIL（`projectCwds`/`subagentArtifactDirs`/`allSubagentFiles` 未定义）。
 
 - [ ] **Step 9: 扩展 `Sources/TokenRec/SessionScanner.swift`**
@@ -1053,7 +1053,7 @@ extension SessionScanner {
 
 - [ ] **Step 11: 运行全部测试确认通过**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test`
+Run: `cd ~/tokenrec && swift test`
 Expected: PASS（Task 2 的 9 个 + Task 3 的 5 个 + Task 4 的 6 个，共 20 个用例全绿）。
 
 - [ ] **Step 12: Commit**
@@ -1356,12 +1356,12 @@ struct DirEditorSheet: View {
 
 - [ ] **Step 5: 构建并目视验证**
 
-Run: `cd /Users/mhbzhy/tokenrec && swift build && .build/debug/TokenRec &`
+Run: `cd ~/tokenrec && swift build && .build/debug/TokenRec &`
 Expected: BUILD SUCCESS；状态栏出现折线图图标且**旁边显示当天 token 总量**（如 `12.3K`）；**目视确认状态栏 SF Symbol 图标正常可见（macOS 27 beta 的 NSMenu 图标隐藏行为只影响菜单项、不影响 status item label；若异常则按全局约束的降级方案处理）**；每 10 秒自动刷新时图标数值随之更新；点击弹出面板：四个统计卡片数值与真实数据一致（主会话 + subagent 合并；今日卡片数值应等于状态栏显示的数值）；segmented 切换小时/天/周/月时折线图随之变化；设置目录弹窗可保存自定义路径。
 
-**subagent 验证**：面板数值应包含 `/Users/mhbzhy/ai-lover-client/.pi-subagents/artifacts/` 中 transcript 的消耗（可在终端对比：`python3 -c "import json,glob;print(sum(sum(e.get('usage',{}).get(k,0) for k in ('input','output','cacheRead','cacheWrite')) for f in glob.glob('/Users/mhbzhy/ai-lover-client/.pi-subagents/artifacts/*_transcript.jsonl') for e in map(json.loads,open(f)) if e.get('recordType')=='message' and e.get('role')=='assistant' and e.get('usage')))"`）；且不重复计数（同一 runId 的 meta 被跳过）。
+**subagent 验证**：面板数值应包含 `~/ai-lover-client/.pi-subagents/artifacts/` 中 transcript 的消耗（可在终端对比：`python3 -c "import json,glob;print(sum(sum(e.get('usage',{}).get(k,0) for k in ('input','output','cacheRead','cacheWrite')) for f in glob.glob('~/ai-lover-client/.pi-subagents/artifacts/*_transcript.jsonl') for e in map(json.loads,open(f)) if e.get('recordType')=='message' and e.get('role')=='assistant' and e.get('usage')))"`）；且不重复计数（同一 runId 的 meta 被跳过）。
 
-Run: `cd /Users/mhbzhy/tokenrec && swift test`
+Run: `cd ~/tokenrec && swift test`
 Expected: 全部测试通过（Task 2/3/4 的 14 个用例）。
 
 - [ ] **Step 6: Commit**
