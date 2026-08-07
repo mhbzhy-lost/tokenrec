@@ -41,6 +41,16 @@ struct UsageSummary: Equatable, Sendable {
     let points: [Granularity: [UsagePoint]]
 }
 
+struct ModelUsage: Identifiable, Equatable, Sendable {
+    let model: String
+    let todayTokens: Int
+    let monthTokens: Int
+    let totalTokens: Int
+    let totalCost: Double
+
+    var id: String { model }
+}
+
 struct UsagePoint: Identifiable, Equatable, Sendable {
     let id: Date
     let date: Date
@@ -105,5 +115,27 @@ enum UsageAggregator {
             (granularity, aggregate(records, granularity: granularity, now: now, calendar: calendar))
         })
         return UsageSummary(todayTokens: todayTokens, monthTokens: monthTokens, totalTokens: totalTokens, totalCost: totalCost, points: points)
+    }
+
+    /// 按模型分组统计（今日/本月/累计/成本），按累计 tokens 降序；无 model 记录归入 "unknown"。
+    static func byModel(
+        _ records: [UsageRecord],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [ModelUsage] {
+        let day = calendar.dateInterval(of: .day, for: now)
+        let month = calendar.dateInterval(of: .month, for: now)
+        var groups: [String: (today: Int, month: Int, total: Int, cost: Double)] = [:]
+        for record in records {
+            let name = (record.model?.isEmpty == false) ? record.model! : "unknown"
+            var group = groups[name] ?? (0, 0, 0, 0)
+            group.total += record.totalTokens
+            group.cost += record.cost
+            if day?.contains(record.timestamp) == true { group.today += record.totalTokens }
+            if month?.contains(record.timestamp) == true { group.month += record.totalTokens }
+            groups[name] = group
+        }
+        return groups.map { ModelUsage(model: $0.key, todayTokens: $0.value.today, monthTokens: $0.value.month, totalTokens: $0.value.total, totalCost: $0.value.cost) }
+            .sorted { $0.totalTokens > $1.totalTokens }
     }
 }

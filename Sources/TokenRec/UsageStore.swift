@@ -10,6 +10,7 @@ final class UsageStore: ObservableObject {
         totalCost: 0,
         points: [:]
     )
+    @Published private(set) var modelUsage: [ModelUsage] = []
     @Published private(set) var lastError: String?
     @Published private(set) var dataDirectory: URL
 
@@ -47,9 +48,13 @@ final class UsageStore: ObservableObject {
         let summary = await Task.detached(priority: .utility) {
             UsageAggregator.summarize(result.records, now: now, calendar: calendar)
         }.value
+        let modelUsage = await Task.detached(priority: .utility) {
+            UsageAggregator.byModel(result.records, now: now, calendar: calendar)
+        }.value
 
         dataDirectory = directory
         self.summary = summary
+        self.modelUsage = modelUsage
         lastError = result.errors.isEmpty
             ? nil
             : result.errors.map { "\($0.path): \($0.message)" }.joined(separator: "\n")

@@ -39,6 +39,8 @@ struct ContentView: View {
 
             UsageChartView(points: chartPoints, granularity: granularity)
 
+            ModelUsageView(modelUsage: store.modelUsage)
+
             HStack(spacing: 4) {
                 Text("数据源：")
                 Text(store.dataDirectory.path)
