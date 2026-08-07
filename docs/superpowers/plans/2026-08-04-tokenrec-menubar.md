@@ -1359,7 +1359,7 @@ struct DirEditorSheet: View {
 Run: `cd ~/tokenrec && swift build && .build/debug/TokenRec &`
 Expected: BUILD SUCCESS；状态栏出现折线图图标且**旁边显示当天 token 总量**（如 `12.3K`）；**目视确认状态栏 SF Symbol 图标正常可见（macOS 27 beta 的 NSMenu 图标隐藏行为只影响菜单项、不影响 status item label；若异常则按全局约束的降级方案处理）**；每 10 秒自动刷新时图标数值随之更新；点击弹出面板：四个统计卡片数值与真实数据一致（主会话 + subagent 合并；今日卡片数值应等于状态栏显示的数值）；segmented 切换小时/天/周/月时折线图随之变化；设置目录弹窗可保存自定义路径。
 
-**subagent 验证**：面板数值应包含 `~/ai-lover-client/.pi-subagents/artifacts/` 中 transcript 的消耗（可在终端对比：`python3 -c "import json,glob;print(sum(sum(e.get('usage',{}).get(k,0) for k in ('input','output','cacheRead','cacheWrite')) for f in glob.glob('~/ai-lover-client/.pi-subagents/artifacts/*_transcript.jsonl') for e in map(json.loads,open(f)) if e.get('recordType')=='message' and e.get('role')=='assistant' and e.get('usage')))"`）；且不重复计数（同一 runId 的 meta 被跳过）。
+**subagent 验证**：面板数值应包含 `~/example-project/.pi-subagents/artifacts/` 中 transcript 的消耗（可在终端对比：`python3 -c "import json,glob;print(sum(sum(e.get('usage',{}).get(k,0) for k in ('input','output','cacheRead','cacheWrite')) for f in glob.glob('~/example-project/.pi-subagents/artifacts/*_transcript.jsonl') for e in map(json.loads,open(f)) if e.get('recordType')=='message' and e.get('role')=='assistant' and e.get('usage')))"`）；且不重复计数（同一 runId 的 meta 被跳过）。
 
 Run: `cd ~/tokenrec && swift test`
 Expected: 全部测试通过（Task 2/3/4 的 14 个用例）。
