@@ -46,7 +46,7 @@ struct UsageChartView: View {
 
     private var axisFormat: Date.FormatStyle {
         switch window {
-        case .hour, .today: .dateTime.hour()
+        case .today: .dateTime.hour()
         case .days7, .days30: .dateTime.month().day()
         }
     }

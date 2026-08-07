@@ -74,13 +74,7 @@ final class UsageAggregatorTests: XCTestCase {
         XCTAssertEqual(summary.points[.hour]?.last?.cost ?? -1, 0.20, accuracy: 0.000_001)
     }
 
-    func testWindowPointsHourAndToday() {
-        // hour：24 个整点桶，最后一个为当前小时
-        let hourPoints = UsageAggregator.points(records: [], window: .hour, now: now, calendar: calendar)
-        XCTAssertEqual(hourPoints.count, 24)
-        let currentHour = calendar.dateInterval(of: .hour, for: now)!.start
-        XCTAssertEqual(hourPoints.last?.date, currentHour)
-
+    func testWindowPointsToday() {
         // today：从今天 0 点起 24 个整点桶（未来小时补 0）
         let todayPoints = UsageAggregator.points(records: [], window: .today, now: now, calendar: calendar)
         XCTAssertEqual(todayPoints.count, 24)
@@ -135,17 +129,6 @@ final class UsageAggregatorTests: XCTestCase {
         let unknown = byModel.first { $0.model == "unknown" }
         XCTAssertEqual(unknown?.windowTokens, 10)
         XCTAssertEqual(unknown?.totalCost ?? 0, 0.01, accuracy: 0.000_001)
-    }
-
-    func testByModelHourWindowRestrictsToLast24Hours() {
-        let records = [
-            record("2026-08-19T13:10:00Z", input: 100, model: "m"), // 当前小时
-            record("2026-08-19T12:10:00Z", input: 50, model: "m"),  // 24h 窗口内
-            record("2026-08-18T10:00:00Z", input: 20, model: "m"),  // 24h 窗口外
-        ]
-        let byModel = UsageAggregator.byModel(records, window: .hour, now: now, calendar: calendar)
-        XCTAssertEqual(byModel.first?.windowTokens, 150)
-        XCTAssertEqual(byModel.first?.totalTokens, 170)
     }
 
     func testByModelTodayWindowOnlyCountsToday() {

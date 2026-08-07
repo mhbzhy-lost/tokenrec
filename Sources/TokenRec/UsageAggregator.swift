@@ -1,8 +1,7 @@
 import Foundation
 
-/// 统计口径：小时/今天/7天/30天（非历法，用于面板切换与模型用量窗口）
+/// 统计口径：今天/7天/30天（非历法，用于面板切换与模型用量窗口）
 enum UsageWindow: CaseIterable, Hashable, Sendable, Identifiable {
-    case hour
     case today
     case days7
     case days30
@@ -11,7 +10,6 @@ enum UsageWindow: CaseIterable, Hashable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .hour: "小时"
         case .today: "今天"
         case .days7: "7天"
         case .days30: "30天"
@@ -21,7 +19,7 @@ enum UsageWindow: CaseIterable, Hashable, Sendable, Identifiable {
     /// 窗口内数据点数量（图表）
     var pointCount: Int {
         switch self {
-        case .hour, .today: 24
+        case .today: 24
         case .days7: 7
         case .days30: 30
         }
@@ -30,7 +28,7 @@ enum UsageWindow: CaseIterable, Hashable, Sendable, Identifiable {
     /// 数据点间隔组件
     fileprivate var pointComponent: Calendar.Component {
         switch self {
-        case .hour, .today: .hour
+        case .today: .hour
         case .days7, .days30: .day
         }
     }
@@ -38,8 +36,6 @@ enum UsageWindow: CaseIterable, Hashable, Sendable, Identifiable {
     /// 窗口起点（byModel 聚合口径）
     fileprivate func windowStart(now: Date, calendar: Calendar) -> Date? {
         switch self {
-        case .hour:
-            return calendar.date(byAdding: .hour, value: -(24 - 1), to: calendar.dateInterval(of: .hour, for: now)!.start)
         case .today:
             return calendar.dateInterval(of: .day, for: now)?.start
         case .days7:
