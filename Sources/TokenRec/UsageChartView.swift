@@ -3,7 +3,7 @@ import SwiftUI
 
 struct UsageChartView: View {
     let points: [UsagePoint]
-    let granularity: Granularity
+    let window: UsageWindow
 
     var body: some View {
         Chart(points) { point in
@@ -45,11 +45,9 @@ struct UsageChartView: View {
     }
 
     private var axisFormat: Date.FormatStyle {
-        switch granularity {
-        case .hour: .dateTime.hour()
-        case .day: .dateTime.month().day()
-        case .week: .dateTime.month().day()
-        case .month: .dateTime.year().month()
+        switch window {
+        case .hour, .today: .dateTime.hour()
+        case .days7, .days30: .dateTime.month().day()
         }
     }
 }

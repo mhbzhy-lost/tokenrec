@@ -11,6 +11,8 @@ final class UsageStore: ObservableObject {
         points: [:]
     )
     @Published private(set) var modelUsage: [ModelUsage] = []
+    @Published private(set) var modelUsageByWindow: [UsageWindow: [ModelUsage]] = [:]
+    @Published private(set) var windowPoints: [UsageWindow: [UsagePoint]] = [:]
     @Published private(set) var lastError: String?
     @Published private(set) var dataDirectory: URL
 
@@ -49,12 +51,24 @@ final class UsageStore: ObservableObject {
             UsageAggregator.summarize(result.records, now: now, calendar: calendar)
         }.value
         let modelUsage = await Task.detached(priority: .utility) {
-            UsageAggregator.byModel(result.records, now: now, calendar: calendar)
+            UsageAggregator.byModel(result.records, window: .today, now: now, calendar: calendar)
+        }.value
+        let modelUsageByWindow = await Task.detached(priority: .utility) {
+            Dictionary(uniqueKeysWithValues: UsageWindow.allCases.map { window in
+                (window, UsageAggregator.byModel(result.records, window: window, now: now, calendar: calendar))
+            })
+        }.value
+        let windowPoints = await Task.detached(priority: .utility) {
+            Dictionary(uniqueKeysWithValues: UsageWindow.allCases.map { window in
+                (window, UsageAggregator.points(records: result.records, window: window, now: now, calendar: calendar))
+            })
         }.value
 
         dataDirectory = directory
         self.summary = summary
         self.modelUsage = modelUsage
+        self.modelUsageByWindow = modelUsageByWindow
+        self.windowPoints = windowPoints
         lastError = result.errors.isEmpty
             ? nil
             : result.errors.map { "\($0.path): \($0.message)" }.joined(separator: "\n")

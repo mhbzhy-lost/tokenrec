@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var store: UsageStore
     @AppStorage("sessionDir") private var sessionDir = ""
-    @State private var granularity: Granularity = .hour
+    @State private var window: UsageWindow = .today
     @State private var isEditingDirectory = false
 
     init(store: UsageStore) {
@@ -11,7 +11,7 @@ struct ContentView: View {
     }
 
     private var chartPoints: [UsagePoint] {
-        store.summary.points[granularity] ?? []
+        store.windowPoints[window] ?? []
     }
 
     var body: some View {
@@ -30,16 +30,16 @@ struct ContentView: View {
                 totalCost: store.summary.totalCost
             )
 
-            Picker("统计粒度", selection: $granularity) {
-                ForEach(Granularity.allCases, id: \.self) { granularity in
-                    Text(granularity.title).tag(granularity)
+            Picker("统计口径", selection: $window) {
+                ForEach(UsageWindow.allCases) { window in
+                    Text(window.title).tag(window)
                 }
             }
             .pickerStyle(.segmented)
 
-            UsageChartView(points: chartPoints, granularity: granularity)
+            UsageChartView(points: chartPoints, window: window)
 
-            ModelUsageView(modelUsage: store.modelUsage)
+            ModelUsageView(modelUsage: store.modelUsageByWindow[window] ?? [], window: window)
 
             HStack(spacing: 4) {
                 Text("数据源：")
